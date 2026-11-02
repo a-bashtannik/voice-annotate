@@ -1,207 +1,203 @@
-# voice-annotate — Spec v0.1
+# voice-annotate — Spec v0.3
 
-A macOS menu bar utility: press a hotkey, talk, point at things on screen, and get an
-agent-ready bundle (annotated images + timestamped transcript) on the clipboard.
+A macOS menu bar utility: press a hotkey, talk, point and draw on screen, and get an
+agent-ready bundle (annotated images + timestamped transcript with grounded references to
+every drawing) on the clipboard. Fully local, free, no API keys.
 
-## 1. Goals / non-goals
+## 1. Goals
 
-**Goals**
-- One hotkey to start, one to finish. Zero dialogs in the hot path.
-- Two modes: **Snapshot** (freeze screen, draw on it) and **Walkthrough** (record while
-  you keep using the computer, draw on top when needed).
-- Output that *any* agent can consume: Claude Code (terminal), claude.ai / ChatGPT web,
-  Cursor/IDE agents.
-- Fully local and free: no API keys, no network.
-- Fast: bundle on clipboard < 2 s after finishing a 30 s Snapshot capture.
+- One hotkey to start, one to finish. No dialogs in the hot path.
+- Two modes:
+  - **Snapshot** — freeze the screen, draw on it while talking. Multi-shot: hide the
+    overlay, navigate, grab the next shot, keep talking — all in one capture.
+  - **Walkthrough** — record the screen while you keep using the computer; draw on top
+    whenever you want (hold-to-draw or toggle).
+- Every annotation (circle, arrow, box, highlight, underline, pin, freehand) is numbered,
+  burned into the image, *and* referenced in the transcript at the moment it was drawn,
+  with its location in image pixel coordinates.
+- Output pastes usefully into any agent: Claude Code (terminal), claude.ai / ChatGPT web,
+  Cursor / IDE chats.
+- Transcription: WhisperKit (MIT, on-device, Apple Silicon optimized), word-level
+  timestamps, custom vocabulary prompt.
+- Bundle on the clipboard within ~2–4 s after finishing (model kept warm).
 
-**Non-goals (v1)**
-- Sending video to agents (almost none accept it — see §4).
-- Cloud sync, sharing links, editing past captures, Windows/Linux.
-- Languages other than English.
+Non-goals: cloud anything, editing past captures, non-English, Windows/Linux.
 
 ## 2. User flows
 
-### 2.1 Snapshot mode (default hotkey `⌃⌥⌘S`)
-1. Hotkey → instant screenshot of the display under the cursor; mic starts recording.
-2. A borderless full-screen overlay shows the frozen frame with a small floating toolbar
-   (recording indicator, tools, timer).
-3. User talks and draws. Tools: pen, arrow, rectangle, highlighter, **numbered pin**
-   (click → drops ①, ②, …), undo (`⌘Z`).
-4. `Enter` or hotkey again → finish. `Esc` → cancel and discard.
-5. Transcribe → compose bundle → copy to clipboard → small HUD toast "Copied ✓ (3 pins, 42 words)".
+### 2.1 Snapshot (default `⌃⌥⌘S`)
+1. Hotkey → screenshot of the display under the cursor (native resolution); mic starts.
+2. Full-screen overlay shows the frozen frame; floating toolbar at the top (timer, mic
+   level, tools, colors, undo, next-shot, finish, cancel).
+3. Draw while talking. Keys: `P` smart pen · `A` arrow · `R` rectangle · `O` ellipse ·
+   `H` highlighter · `N` pin · `1–6` colors · `⌘Z` undo · `⌫` delete last.
+4. `Tab` → **next shot**: overlay hides, audio keeps recording, HUD says "navigate, then
+   press ⌃⌥⌘S for the next shot". Hotkey → new screenshot, overlay returns.
+5. `Enter` (or hotkey ⌃⌥⌘F) → finish. `Esc` → cancel & discard.
+6. Focus returns to the app that was frontmost before capture so you can paste immediately.
 
-### 2.2 Walkthrough mode (default hotkey `⌃⌥⌘R`)
-1. Hotkey → screen recording of the display under the cursor + mic start. A small HUD shows
-   recording state and elapsed time.
-2. A transparent overlay sits above all windows but **passes clicks through** — the user
-   keeps navigating normally.
-3. **Draw mode** is toggled by holding a modifier (default: `fn`/`⌥`, see risk R3) or
-   tapping `⌃⌥⌘D`. While active, the overlay captures the mouse; strokes fade after ~2.5 s
-   (laser-pointer style). Pins persist until the next significant screen change.
-4. The overlay is *included* in the capture, so annotations are burned into frames for free.
-   The HUD/toolbar window is *excluded* (`SCContentFilter` exclusion).
-5. Hotkey again → stop → keyframe extraction (§4) → transcribe → bundle → clipboard.
-6. Hard cap: 5 min (configurable), with a warning at 4:30.
+### 2.2 Walkthrough (default `⌃⌥⌘R`)
+1. Hotkey → records the display under the cursor + mic. HUD at top: rec dot, timer, mic
+   level, draw-mode state, tools/colors, finish, cancel.
+2. Transparent overlay above everything, click-through by default.
+3. **Draw mode**: hold `⌃⌥` (configurable; polled via `CGEventSource.flagsState`, no
+   permission needed) or toggle with `⌃⌥⌘D`. While on, the overlay takes the mouse.
+4. Strokes fade after 3 s (configurable), pins after 5 s — laser-pointer feel.
+5. Overlay is *in* the capture (annotations burned into frames); HUD/toasts are excluded
+   via `SCContentFilter(excludingWindows:)` + `sharingType = .none`.
+6. Same hotkey (or `⌃⌥⌘F`) → stop. Auto-stop at max length (default 10 min).
 
-## 3. Architecture
+### 2.3 Multiple displays
+All connected displays take part (setting "Capture all displays", default on):
+- **Snapshot** freezes every display at once; draw on any of them (the overlay under the
+  pointer takes focus on click). Frames = the display the cursor was on + every display that
+  was annotated, per round.
+- **Walkthrough** records every display in parallel (one ScreenCaptureKit stream + HEVC file
+  each) with a click-through overlay on each. The cursor's display over time is the user's
+  focus: optional keyframes only come from the display the cursor was on (±1 s), a stay of
+  ≥ 2 s on another display adds a "display switch" frame, start/end frames come from the
+  first/last display. Annotations are always kept wherever they were drawn. The HUD follows
+  the cursor. Frames are numbered chronologically across displays and labelled with the
+  display name in `capture.md`; `events.json` lists each display's canvas size.
 
-Native Swift 6 / SwiftUI app, `LSUIElement` (menu bar only), macOS 26+.
+### 2.4 After finishing
+HUD toast: "Transcribing…" → "Copied ✓ 9 frames · 3 annotations · 142 words". Menu bar
+→ *Recent captures* → copy again in another format / reveal in Finder.
 
-```
-┌───────────────────────── App (MenuBarExtra) ─────────────────────────┐
-│ HotkeyService ──► SessionController (state machine per capture)      │
-│                     │                                                │
-│   ┌─────────────────┼──────────────────┬───────────────────┐         │
-│   ▼                 ▼                  ▼                   ▼         │
-│ CaptureService   AudioRecorder    OverlayController    EventLogger   │
-│ (ScreenCaptureKit) (AVAudioEngine)  (NSWindow + Canvas)  (clicks, pins,│
-│                                                         strokes, t)  │
-│   └──────────────┬──┴──────────────────┴───────────────────┘         │
-│                  ▼                                                   │
-│        Pipeline: KeyframeSelector → Transcriber → BundleComposer     │
-│                  ▼                                                   │
-│             ClipboardWriter                                          │
-└──────────────────────────────────────────────────────────────────────┘
-```
+## 3. Annotations
 
-| Component | Tech | Notes |
-|---|---|---|
-| Hotkeys | [`KeyboardShortcuts`](https://github.com/sindresorhus/KeyboardShortcuts) (MIT) | Carbon `RegisterEventHotKey` underneath — no Accessibility permission needed; user-rebindable. |
-| Screenshot | `SCScreenshotManager.captureImage` | Display under cursor. |
-| Screen video | `SCStream` → `AVAssetWriter` (HEVC, 10 fps, native res capped at 1920 px wide) | Low fps keeps files small; we only need keyframes. Frames also tapped live for keyframe scoring. |
-| Audio | `AVAudioEngine` input tap → 16 kHz mono buffer + `.m4a` file | Same buffer is fed to the transcriber. |
-| Overlay | Borderless `NSPanel`, `.screenSaver` level, `canJoinAllSpaces`; `ignoresMouseEvents` toggled for pass-through | SwiftUI `Canvas` for strokes. Every stroke/pin is timestamped. |
-| Click logging | `NSEvent.addGlobalMonitorForEvents(.leftMouseDown)` | Optional; needs Accessibility. Used as keyframe signal + "[click at (x,y)]" in transcript. Degrades gracefully if denied. |
-| Transcription | **Apple `SpeechAnalyzer` + `SpeechTranscriber`** (macOS 26) | Free, on-device, word-level `audioTimeRange`. Model assets via `AssetInventory` (one-time download, system-managed). Contextual strings for jargon if supported. |
-| Transcription fallback | [WhisperKit](https://github.com/argmaxinc/WhisperKit) (MIT) | Behind a protocol `Transcriber`; only if SpeechAnalyzer quality is insufficient on technical vocab. |
-| Image processing | Core Image / vImage | Downscale, diff, perceptual hash. |
+| Tool | Description in transcript |
+|---|---|
+| Smart pen (freehand) | auto-classified on release: closed loop → **circled** region; near-straight → **underline/line**; else **drawing over** region |
+| Arrow | **arrow** from (x,y) **pointing at** (x,y) |
+| Rectangle | **box around** (x1,y1)–(x2,y2) |
+| Ellipse | **circled** region (x1,y1)–(x2,y2) |
+| Highlighter | **highlighted** region |
+| Pin | **pin** at (x,y) |
 
-### 3.1 Session state machine
-`idle → arming → recording(mode) → finishing → processing → done(bundle) | failed(error) | cancelled`.
-One session at a time; hotkey during `processing` is ignored with a HUD hint.
+Each annotation gets a sequential number `#n` per capture, drawn as a badge next to it
+(pins *are* the badge). In the transcript it appears as
+`[#3 circled (412,230)–(640,310) in frame 2]`, inserted at the word being spoken when
+drawing started. All coordinates are in the output image's pixel space, top-left origin.
 
-### 3.2 Permissions (requested lazily, first use)
-| Permission | Needed for | If denied |
-|---|---|---|
-| Screen Recording | both modes | hard fail, open System Settings pane |
-| Microphone | both modes | continue silent (annotations only) |
-| Speech recognition | maybe for SpeechTranscriber — verify | fall back to no transcript, keep audio file |
-| Accessibility | click logging only | skip click events |
+## 4. Walkthrough → keyframe storyboard
 
-**Dev gotcha:** ad-hoc signed rebuilds reset the Screen Recording (TCC) grant every build.
-Sign with a stable Apple Development certificate from day one.
+Agents don't take video, so a walkthrough becomes an adaptive set of keyframes.
 
-## 4. The "compact format": keyframe storyboard
+**Live analysis** (ScreenCaptureKit stream, up to 10 fps, frames only on change): each
+frame → 64×40 luminance thumbnail; mean-abs-diff vs previous.
 
-Agents take images + text, not video. So a Walkthrough is compressed into **≤ N keyframes
-(default 8)** aligned to the transcript.
+**Candidates** (session time):
+- **Settle** after an activity burst (consecutive changing frames) — scored by net change
+  between before/after thumbnails; long bursts (scrolling, video) emit every 4 s.
+- **Annotation burst end** (+150 ms, so the stroke is rendered) — *always kept*; bursts
+  merge annotations drawn ≤ 1.5 s apart without a screen change, so one frame shows all.
+- **Click** (global mouse monitor, no permission needed) → next settle or +500 ms.
+- **Speech segment start**, low weight; **first** and **last** frame always.
+- **Periodic fallback** every 15 s of no other candidate.
 
-**Candidate signals** (sampled from the live stream at 2 fps, 256 px grayscale thumbnails):
-- **Visual change**: mean abs diff vs. last kept frame; spikes = navigation/new view.
-- **Settle**: frame after a change once the screen is stable for ≥ 400 ms (avoid
-  mid-animation frames — always prefer the settled frame over the spike frame).
-- **Annotation**: frame at the end of every stroke/pin (most important signal — the user
-  explicitly pointed at something).
-- **Click**: settled frame ~300 ms after a click.
-- **Speech**: frame at the start of each speech segment / after long pauses (> 1.2 s).
+**Selection**: annotation frames first, then by score with ≥ 1.2 s spacing; an optional
+frame is dropped if it looks identical to its chronological neighbours (so returning to an
+earlier view is kept), and the end frame is dropped if it shows nothing new. Budget:
+`max(6, duration / 5 s)`, capped by the *max frames* setting (default 30), shared across
+displays.
 
-**Selection**: score = weighted sum of signals → non-max suppression in time (min 1.5 s
-apart) → dedupe by dHash (Hamming < 6) → keep top N, sorted chronologically. Always keep
-the first and last frame. Tunable weights in a constants file; we'll calibrate on real captures.
+**Detail crops**: on large displays (output < 0.8 px per point, e.g. a 3008 pt wide 4K/6K
+screen at 1568 px) frames with annotations get an extra native-resolution crop around them. Frames are extracted from the recorded HEVC file
+post-hoc with `AVAssetImageGenerator` (zero tolerance), downscaled to 1568 px long edge.
 
-**Image output**: PNG, long edge downscaled to 1568 px (Claude's sweet spot; also fine
-for GPT/Gemini). Snapshot mode emits 1 image (annotated) + optionally the clean original.
+## 5. Bundle
 
-The full `.mp4` and `.m4a` are kept in the bundle folder for agents/tools that *can* use
-them (e.g. Gemini), but are not put on the clipboard by default.
-
-## 5. Bundle format
-
-Folder: `~/Library/Application Support/voice-annotate/captures/2026-11-02_14-03-12/`
-(auto-pruned after 7 days, configurable).
+`~/.voice-annotate/captures/2026-11-02_14-03-12/` (no spaces in paths so terminals and
+agents handle them; auto-pruned after 14 days)
 
 ```
-capture.md
-frame_01.png
-frame_02.png
-...
+capture.md         # what the agent reads
+frame_01.png …     # annotated keyframes / shots
 audio.m4a
-recording.mp4        # walkthrough only
-events.json          # raw timeline: words, strokes, pins, clicks, keyframes
+recording.mp4      # walkthrough: video + mic audio (muxed in background);
+                   # recording_displayN.mp4 per display when several were recorded
+events.json        # full timeline: words, annotations (+geometry), clicks, frames
 ```
 
-`capture.md` — the thing agents read. Transcript is interleaved with frame references
-and pin/click markers at the moment they happened, so "this one" is grounded:
+`capture.md`:
 
 ```markdown
-# Screen capture — 2026-11-02 14:03 (walkthrough, 0:47)
+# Screen capture · walkthrough · 0:47 · 2026-11-02 14:03
 
-Images: frame_01.png … frame_04.png in /Users/…/captures/2026-11-02_14-03-12/
+The user recorded their screen while talking. Numbered marks (#1, #2, …) in the images are
+the user's own annotations; each appears in the transcript where it was drawn. Coordinates
+are pixels in the referenced image (origin top-left).
 
-[00:00] ![frame_01](…/frame_01.png)
-So I'm on the settings page and when I click save [click @ 812,440]
+Frames (1568×1018 px):
+- frame 1 · 00:00 · /Users/…/frame_01.png
+- frame 2 · 00:06 · /Users/…/frame_02.png
 
-[00:06] ![frame_02](…/frame_02.png)
-this error shows up [pin ①] even though the form is valid. And this field here [pin ②]
-should actually be optional.
+## Transcript
 
-[00:19] ![frame_03](…/frame_03.png)
-...
+**[00:00 · frame 1]** So I'm on the settings page and when I click save [click at (812,440)]
+
+**[00:06 · frame 2]** this error shows up [#1 circled (400,220)–(620,300)] even though…
 ```
 
-Pins are drawn as numbered circles in the image *and* referenced in the text, which gives
-the agent an unambiguous pointer↔speech link.
+## 6. Clipboard
 
-## 6. Clipboard strategy ("paste into anything")
+Default **Universal** write — one pasteboard write, multiple items:
+1. item 0: `public.utf8-plain-text` = `capture.md` (absolute image paths) → terminals,
+   Claude Code (reads/attaches the paths).
+2. items 1…N: `public.file-url` + `public.png` per image → browsers/Electron accept them as
+   attachments.
 
-The pasteboard can hold multiple items with multiple representations; each target reads
-what it understands. We write **one pasteboard write** containing:
+*Copy as…* (menu, per recent capture): **Text + paths**, **Images + text** (images first),
+**Images only**, **Composite** (single tall image: frames + transcript rendered beneath, for
+targets that take one image), **Markdown file** (the .md file itself as file URL).
 
-1. **Item 0** — `public.utf8-plain-text`: `capture.md` content with absolute image paths.
-   → Terminals (Claude Code) paste this; Claude Code reads the images from the paths.
-2. **Items 1…N** — `public.file-url` per PNG (+ `public.png` data on each).
-   → Browsers / Electron apps that accept pasted files get attachments.
+## 7. Architecture
 
-Since targets differ in how they handle mixed pasteboards, the menu bar also offers
-**"Copy as…"** for the last capture: *Text + paths* (terminal), *Images + text* (web),
-*Single composite image* (contact sheet with transcript underneath — for targets that only
-take one image). A per-app default can be set (frontmost app at finish time decides).
+Swift 6 toolchain (Swift 5 language mode), SwiftPM, macOS 26+, `LSUIElement` agent app,
+assembled into a signed `.app` by `scripts/build-app.sh`.
 
-→ **Validate early** (milestone M3): a paste test matrix across Claude Code / iTerm,
-Terminal, claude.ai (Safari + Chrome), ChatGPT web, Cursor, VS Code Copilot chat.
+- `VoiceAnnotateCore` (pure, unit-tested): models, shape classifier, keyframe selector,
+  transcript interleaver, markdown composer, geometry mapping.
+- `VoiceAnnotate` (app): hotkeys (Carbon `RegisterEventHotKey`), `SessionController`
+  state machine, `ScreenCapturer` (SCScreenshotManager + SCStream → AVAssetWriter HEVC
+  + live thumbnails), `AudioRecorder` (AVAudioEngine → 16 kHz mono + m4a), overlay
+  (`NSPanel` + custom `NSView`, shared `AnnotationRenderer` for on-screen and offline
+  rendering), HUD (SwiftUI in `NSPanel`), `Transcriber` (WhisperKit, preloaded at launch,
+  model in `~/.voice-annotate/models`), `BundleWriter`, `ClipboardWriter`, settings window,
+  onboarding/permissions window, launch-at-login (`SMAppService`).
 
-## 7. Settings (minimal)
-Hotkeys · max keyframes · max walkthrough length · keep clean original (Snapshot) ·
-retention days · per-app paste format · fade duration · mic device.
+Clock: everything is in host time (`mach_absolute_time` seconds — same base as
+`CACurrentMediaTime`, SCStream PTS, `AVAudioTime.hostTime`, `NSEvent.timestamp`) minus
+session start.
 
-## 8. Milestones
+## 8. Permissions
 
-| # | Deliverable | Done when |
+| Permission | For | If denied |
 |---|---|---|
-| M0 | Xcode project, menu bar app, hotkeys, permission onboarding, stable signing | Hotkey shows a HUD toast; permissions flow works |
-| M1 | Snapshot capture + overlay drawing (pen, arrow, rect, highlight, pins, undo) | Annotated PNG written to bundle folder |
-| M2 | Audio + SpeechAnalyzer transcription with word timestamps; pins/strokes interleaved | `capture.md` correct for a Snapshot |
-| M3 | ClipboardWriter + paste test matrix | Snapshot bundle pastes usefully into all targets in §6 |
-| M4 | Walkthrough recording, pass-through overlay, draw-mode toggle, fading strokes, HUD excluded from capture | `.mp4` with burned-in annotations |
-| M5 | KeyframeSelector + click logging | ≤ 8 sensible frames from a real 1-min walkthrough |
-| M6 | Settings, retention, "Copy as…", polish | Daily-drivable |
+| Screen Recording | both modes | can't capture → onboarding window explains + opens Settings |
+| Microphone | voice | capture continues without transcript |
 
-Snapshot mode alone (M0–M3) is already useful and is the first shippable cut.
+No Accessibility / Input Monitoring needed (hotkeys via Carbon, modifier polling via
+`CGEventSource`, mouse-down global monitor).
 
-## 9. Risks / open questions
+Signed with the stable Apple Development identity so TCC grants survive rebuilds.
 
-- **R1 – Mixed-pasteboard behavior** varies per app (some paste only text, some only the
-  first image). Mitigation: "Copy as…" + per-app defaults; M3 test matrix.
-- **R2 – SpeechAnalyzer quality on code/tech jargon.** Mitigation: contextual strings
-  (if available), `Transcriber` protocol with WhisperKit fallback.
-- **R3 – Draw-mode modifier in Walkthrough.** Observing a held modifier globally
-  (`flagsChanged` global monitor) likely needs Accessibility. Default to a toggle hotkey
-  (no permission), offer hold-to-draw when Accessibility is granted.
-- **R4 – Multi-monitor.** v1 captures the display under the cursor at start only.
-- **R5 – Fullscreen apps / Spaces / Stage Manager** may hide or reorder the overlay —
-  test early in M1.
-- **R6 – Privacy.** Recordings may contain secrets; everything stays local, auto-pruned,
-  and the clipboard only carries what's in the bundle.
-- **Q1** – Should Snapshot also allow scrolling/switching to a second screenshot within one
-  session (multi-shot Snapshot)? Cheap to add after M3.
-- **Q2** – Distribution: personal build only, or notarized DMG / Homebrew cask later?
+## 9. Settings
+
+Hotkeys (recorder) · Whisper model (default `openai_whisper-large-v3-v20240930_turbo_632MB`,
+alternatives small.en / base.en) · compute (Auto / GPU / Neural Engine) · custom vocabulary · max frames · image long edge ·
+max walkthrough length · fade duration · draw-mode modifier · keep clean originals ·
+default clipboard format · retention days · sounds · launch at login.
+
+## 10. Risks
+
+- Mixed pasteboards are interpreted differently per app → *Copy as…* formats.
+- First Neural Engine compile of the large encoder takes ~10 min on an M1 Pro (cached
+  afterwards, invalidated when the binary changes). **Auto** compute loads a GPU-encoder build
+  first (~15 s cold, ~3 s warm; ~0.25× real time) and swaps in the Neural Engine build
+  (~0.08× real time) once it has compiled in the background.
+- Overlay vs. fullscreen apps / Stage Manager → `canJoinAllSpaces` + `fullScreenAuxiliary`.
+- Displays connected/disconnected mid-capture are not handled (the display list is fixed at
+  start).
+- Recordings can contain secrets → local only, auto-pruned.
