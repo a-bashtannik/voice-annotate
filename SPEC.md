@@ -144,7 +144,9 @@ Frames (1568×1018 px):
 
 Default **Universal** write — one pasteboard write, multiple items:
 1. item 0: `public.utf8-plain-text` = `capture.md` (absolute image paths) → terminals,
-   Claude Code (reads/attaches the paths).
+   Claude Code (reads/attaches the paths); plus `public.file-url` of `capture.md`, because
+   Electron/web chats (Claude desktop, claude.ai, Cursor) attach the files and drop the text
+   when images are on the pasteboard — the transcript then arrives as an attached `.md`.
 2. items 1…N: `public.file-url` + `public.png` per image → browsers/Electron accept them as
    attachments.
 

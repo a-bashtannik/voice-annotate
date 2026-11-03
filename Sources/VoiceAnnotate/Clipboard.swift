@@ -27,7 +27,11 @@ enum ClipboardWriter {
         var items: [NSPasteboardItem]
         switch format {
         case .universal:
-            items = [textItem()] + images.map { fileItem($0, png: true) }
+            // Terminals paste the text; chat apps (Electron/web) attach files and drop the
+            // text when images are present, so the transcript also travels as capture.md.
+            let first = textItem()
+            first.setString(capture.markdownURL.absoluteString, forType: .fileURL)
+            items = [first] + images.map { fileItem($0, png: true) }
         case .textAndPaths:
             items = [textItem()]
         case .imagesAndText:

@@ -136,7 +136,7 @@ enum ClipboardFormat: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .universal: return "Universal (text + image files)"
+        case .universal: return "Universal (text, capture.md + images)"
         case .textAndPaths: return "Text with image paths (terminal agents)"
         case .imagesAndText: return "Images first, then text (web chats)"
         case .imagesOnly: return "Images only"
