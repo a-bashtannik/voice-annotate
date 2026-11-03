@@ -8,7 +8,8 @@ enum CLI {
     voice-annotate developer commands:
       --transcribe <audio-file> [model]      Transcribe a file, print word timings
       --render-demo <out.png>                Render every annotation type onto a test image
-      --demo-snapshot <audio-file>           Full Snapshot pipeline on a synthetic screenshot
+      --demo-snapshot <audio-file> [screenshot.png annotations.json]
+                                             Full Snapshot pipeline on a synthetic (or given @2x) screenshot
       --test-walkthrough <seconds> [screen|all]  Record display(s) (index into NSScreen.screens), run the pipeline
       --test-screenshot [screen]             Screenshot a display, run the pipeline
     """
@@ -22,7 +23,7 @@ enum CLI {
                 case "--render-demo" where args.count >= 2:
                     try renderDemo(to: URL(fileURLWithPath: args[1]))
                 case "--demo-snapshot" where args.count >= 2:
-                    try await demoSnapshot(audioPath: args[1])
+                    try await demoSnapshot(audioPath: args[1], imagePath: args.count >= 4 ? args[2] : nil, annotationsPath: args.count >= 4 ? args[3] : nil)
                 case "--test-walkthrough" where args.count >= 2:
                     let which = args.count >= 3 ? args[2] : nil
                     try await testWalkthrough(seconds: Double(args[1]) ?? 5, screens: which == "all" ? NSScreen.screens : [try screen(at: which)])
@@ -169,32 +170,63 @@ enum CLI {
     }
 
     @MainActor
-    private static func finishDemo(_ input: CaptureInput) async throws {
+    private static func finishDemo(_ input: CaptureInput, clipboard: Bool = true) async throws {
         let started = Date()
         let capture = try await CaptureProcessor.process(input)
         out(String(format: "processed in %.2fs → %@", Date().timeIntervalSince(started), capture.folder))
-        try ClipboardWriter.write(capture, format: .universal)
-        out("clipboard: \(NSPasteboard.general.pasteboardItems?.count ?? 0) items")
+        if clipboard {
+            try ClipboardWriter.write(capture, format: .universal)
+            out("clipboard: \(NSPasteboard.general.pasteboardItems?.count ?? 0) items")
+        }
         out("----- capture.md -----")
         out(try String(contentsOf: capture.markdownURL, encoding: .utf8))
         try? await Task.sleep(nanoseconds: 1_500_000_000) // let background muxing finish
     }
 
+    /// One mark of an `--demo-snapshot` annotations file: canvas points (top-left origin), session seconds.
+    private struct DemoMark: Decodable {
+        let tool: AnnotationTool
+        let points: [[Double]]
+        let color: String
+        let start: Double
+        let end: Double
+    }
+
+    private static func loadDemoMarks(from url: URL) throws -> [Annotation] {
+        let colors: [String: RGBAColor] = ["red": .red, "yellow": .yellow, "green": .green, "blue": .blue, "magenta": .magenta, "white": .white]
+        let marks = try JSONDecoder().decode([DemoMark].self, from: Data(contentsOf: url))
+        return try marks.enumerated().map { i, m in
+            guard let color = colors[m.color] else { throw AppError("Unknown color \(m.color)") }
+            var a = Annotation(id: i + 1, tool: m.tool, points: m.points.map { CGPoint(x: $0[0], y: $0[1]) }, color: color, startTime: m.start)
+            a.finalize(endTime: m.end)
+            return a
+        }
+    }
+
     @MainActor
-    private static func demoSnapshot(audioPath: String) async throws {
+    private static func demoSnapshot(audioPath: String, imagePath: String?, annotationsPath: String?) async throws {
         Paths.ensure()
         let samples = try AudioRecorder.loadSamples(from: URL(fileURLWithPath: audioPath))
         try await loadModel(AppSettings.shared.model.rawValue)
-        let canvas = CGSize(width: 3008, height: 1692) // 6K display at 2x: exercises detail crops
-        let image = demoImage(size: canvas, scale: 2)
+        var canvas = CGSize(width: 3008, height: 1692) // 6K display at 2x: exercises detail crops
+        var image = demoImage(size: canvas, scale: 2)
+        var annotations = demoAnnotations()
+        if let imagePath, let annotationsPath {
+            guard let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: imagePath) as CFURL, nil),
+                  let loaded = CGImageSourceCreateImageAtIndex(src, 0, nil) else { throw AppError("Could not read \(imagePath)") }
+            image = loaded
+            canvas = CGSize(width: loaded.width / 2, height: loaded.height / 2)
+            annotations = try loadDemoMarks(from: URL(fileURLWithPath: annotationsPath))
+        }
         let folder = try Paths.newCaptureFolder()
         let t0 = HostClock.now()
         var input = settingsInput(mode: .snapshot, folder: folder, t0: t0, duration: Double(samples.count) / AudioResult.sampleRate)
         input.shots = [ShotData(image: image, time: 0.1, canvasSize: canvas, display: 0, round: 0, primary: true)]
-        input.displays = [DisplayInfo(index: 0, name: "Demo 6K", canvasSize: canvas)]
-        input.annotations = demoAnnotations()
+        input.displays = [DisplayInfo(index: 0, name: "Demo", canvasSize: canvas)]
+        input.annotations = annotations
         input.audio = AudioResult(samples: samples, firstSampleHostTime: t0)
-        try await finishDemo(input)
+        // A given screenshot means generating docs assets: leave the user's clipboard alone.
+        try await finishDemo(input, clipboard: imagePath == nil)
     }
 
     @MainActor
