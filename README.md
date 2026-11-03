@@ -52,24 +52,29 @@ everything else is the actual pipeline ([example capture.md](docs/demo/example-c
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TB
     hk([Hotkey]) --> cap
-    subgraph cap [Capture: one host clock]
-        direction TB
+    subgraph cap [Capture, all on one host clock]
+        direction LR
         scr[ScreenCaptureKit<br/>screenshots / HEVC per display]
         mic[AVAudioEngine<br/>16 kHz mic]
-        ovl[Overlay strokes<br/>clicks, cursor display]
+        ovl[Overlay<br/>strokes, clicks, cursor display]
     end
     cap --> proc
     subgraph proc [Processing]
-        direction TB
+        direction LR
         asr[WhisperKit<br/>word timestamps]
         kf[Keyframe selector<br/>walkthrough only]
         shp[Shape classifier<br/>+ coordinate mapping]
         ren[Renderer<br/>marks, badges, detail crops]
     end
-    proc --> md[capture.md<br/>transcript with mark refs] --> clip([Clipboard])
-    ren --> png[frame_NN.png] --> clip
+    proc --> out
+    subgraph out [Bundle]
+        direction LR
+        md[capture.md<br/>transcript with mark refs]
+        png[frame_NN.png]
+    end
+    out --> clip([Clipboard])
 ```
 
 Some of the design decisions:
