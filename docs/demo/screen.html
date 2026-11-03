@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1512px; height: 982px; overflow: hidden; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; }
+  body { background: linear-gradient(135deg, #1f3b57 0%, #3d5f7a 45%, #c98f6b 100%); position: relative; }
+  .menubar { height: 25px; background: rgba(245,245,247,.72); backdrop-filter: blur(20px); display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: #1d1d1f; gap: 18px; }
+  .menubar b { font-weight: 700; }
+  .menubar .right { margin-left: auto; display: flex; gap: 14px; color: #333; }
+  .win { position: absolute; left: 70px; top: 52px; width: 1372px; height: 900px; background: #fbfbfd; border-radius: 12px; box-shadow: 0 30px 80px rgba(0,0,0,.45), 0 0 0 .5px rgba(0,0,0,.3); overflow: hidden; }
+  .chrome { height: 46px; background: #ececef; border-bottom: 1px solid #d8d8dc; display: flex; align-items: center; padding: 0 16px; gap: 8px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .url { margin-left: 90px; width: 520px; height: 28px; background: #fff; border-radius: 7px; font-size: 13px; color: #555; display: flex; align-items: center; padding: 0 12px; border: 1px solid #ddd; }
+  .app { display: flex; height: calc(100% - 46px); }
+  .side { width: 210px; background: #f2f3f6; border-right: 1px solid #e2e3e8; padding: 22px 14px; font-size: 14px; color: #44464f; }
+  .logo { font-weight: 700; font-size: 17px; color: #1b1d26; margin-bottom: 26px; display: flex; align-items: center; gap: 8px; }
+  .logo i { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg,#5b6cff,#22c3a6); display: inline-block; }
+  .nav div { padding: 8px 10px; border-radius: 7px; margin-bottom: 2px; }
+  .nav .on { background: #e2e5ff; color: #2c37b8; font-weight: 600; }
+  .main { flex: 1; padding: 26px 32px; position: relative; }
+  h1 { font-size: 24px; color: #15171f; font-weight: 650; }
+  .sub { color: #70737f; font-size: 14px; margin-top: 4px; }
+  .filters { display: flex; gap: 10px; margin-top: 18px; }
+  .chip { border: 1px solid #d9dbe3; background: #fff; border-radius: 8px; padding: 7px 12px; font-size: 13px; color: #3a3d48; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 22px; }
+  .card { background: #fff; border: 1px solid #e4e6ec; border-radius: 12px; padding: 16px 18px; }
+  .card .k { font-size: 13px; color: #70737f; }
+  .card .v { font-size: 28px; font-weight: 650; color: #15171f; margin-top: 6px; }
+  .card .d { font-size: 12px; color: #1a9e62; margin-top: 4px; }
+  .chartbox { margin-top: 18px; background: #fff; border: 1px solid #e4e6ec; border-radius: 12px; padding: 16px 18px; height: 430px; position: relative; }
+  .chartbox h2 { font-size: 15px; font-weight: 600; color: #222; }
+  .legend { position: absolute; right: 30px; top: 250px; background: rgba(255,255,255,.96); border: 1px solid #e0e2ea; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #333; line-height: 1.8; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .legend span { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 8px; }
+  .export { position: absolute; left: 32px; bottom: 28px; background: #4152f2; color: #fff; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+</style></head>
+<body>
+  <div class="menubar"><b></b><b>Safari</b><span>File</span><span>Edit</span><span>View</span><span>History</span><span>Window</span><span>Help</span>
+    <div class="right"><span>Tue 3 Nov</span><span>14:32</span></div></div>
+  <div class="win">
+    <div class="chrome"><div class="dot" style="background:#ff5f57"></div><div class="dot" style="background:#febc2e"></div><div class="dot" style="background:#28c840"></div>
+      <div class="url">localhost:5173/runs/vit-b16-sweep</div></div>
+    <div class="app">
+      <div class="side">
+        <div class="logo"><i></i>runboard</div>
+        <div class="nav"><div>Overview</div><div class="on">Runs</div><div>Sweeps</div><div>Datasets</div><div>Checkpoints</div><div>Settings</div></div>
+      </div>
+      <div class="main">
+        <h1>vit-b16-sweep</h1>
+        <div class="sub">4 runs · ImageNet-1k · started 2 Nov, 09:14</div>
+        <div class="filters"><div class="chip">Metric: val loss ▾</div><div class="chip">Smoothing: 0.6 ▾</div><div class="chip">Runs: all ▾</div><div class="chip">Last 24 h ▾</div></div>
+        <div class="cards">
+          <div class="card"><div class="k">Best val accuracy</div><div class="v">312.4%</div><div class="d">▲ 1.8 pts vs. baseline</div></div>
+          <div class="card"><div class="k">Best val loss</div><div class="v">0.842</div><div class="d">▼ 0.031</div></div>
+          <div class="card"><div class="k">GPU hours</div><div class="v">186</div><div class="d" style="color:#70737f">8 × H100</div></div>
+          <div class="card"><div class="k">Throughput</div><div class="v">2,410</div><div class="d" style="color:#70737f">img / s / GPU</div></div>
+        </div>
+        <div class="chartbox">
+          <h2>Validation loss</h2>
+          <svg width="1080" height="370" viewBox="0 0 1080 370" style="margin-top:6px">
+            <g stroke="#eef0f4" stroke-width="1">
+              <line x1="50" y1="20" x2="1070" y2="20"/><line x1="50" y1="100" x2="1070" y2="100"/><line x1="50" y1="180" x2="1070" y2="180"/><line x1="50" y1="260" x2="1070" y2="260"/><line x1="50" y1="340" x2="1070" y2="340"/>
+            </g>
+            <g font-size="11" fill="#8a8d99"><text x="14" y="24">2.4</text><text x="14" y="104">1.8</text><text x="14" y="184">1.4</text><text x="14" y="264">1.0</text><text x="14" y="344">0.6</text>
+              <text x="50" y="362">0</text><text x="300" y="362">25k</text><text x="550" y="362">50k</text><text x="800" y="362">75k</text><text x="1040" y="362">100k</text></g>
+            <path d="M50,30 C200,170 350,215 520,240 S850,262 1070,270" fill="none" stroke="#4152f2" stroke-width="2.5"/>
+            <path d="M50,40 C210,190 380,240 560,262 S880,285 1070,292" fill="none" stroke="#22b38c" stroke-width="2.5"/>
+            <path d="M50,26 C190,150 330,200 500,222 S830,236 1070,238" fill="none" stroke="#f08a24" stroke-width="2.5"/>
+            <path d="M50,48 C230,210 400,262 590,282 S900,300 1070,306" fill="none" stroke="#c04ad6" stroke-width="2.5"/>
+          </svg>
+          <div class="legend"><div><span style="background:#4152f2"></span>lr 3e-4 · wd 0.05</div><div><span style="background:#22b38c"></span>lr 1e-3 · wd 0.05</div><div><span style="background:#f08a24"></span>lr 3e-4 · wd 0.1</div><div><span style="background:#c04ad6"></span>lr 1e-3 · wd 0.1</div></div>
+        </div>
+        <div class="export">Export CSV</div>
+      </div>
+    </div>
+  </div>
+</body></html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<!-- README hero: the demo capture (docs/images/snapshot-frame.png) next to what the agent receives.
+     Rendered by render.sh. -->
+<html><head><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 700px; overflow: hidden; }
+  body { font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; background: #f4f1ec; display: flex; align-items: center; gap: 26px; padding: 0 32px; justify-content: center; }
+  .col { display: flex; flex-direction: column; gap: 14px; }
+  .label { font-size: 17px; font-weight: 600; color: #3b3732; display: flex; align-items: center; gap: 10px; }
+  .label .n { width: 26px; height: 26px; border-radius: 50%; background: #ff3b30; color: #fff; font-size: 14px; display: grid; place-items: center; }
+  .label kbd { font: 600 14px "SF Mono", Menlo, monospace; background: #fff; border: 1px solid #d8d2c8; border-bottom-width: 2px; border-radius: 6px; padding: 2px 7px; color: #3b3732; }
+  .shot { width: 850px; border-radius: 10px; box-shadow: 0 18px 50px rgba(40,30,20,.22), 0 0 0 1px rgba(0,0,0,.08); display: block; }
+  .arrow { font-size: 40px; color: #b5ab9c; margin-top: 40px; }
+  .panel { width: 560px; align-self: flex-start; background: #1c1b1f; border-radius: 12px; box-shadow: 0 18px 50px rgba(40,30,20,.25); overflow: hidden; }
+  .bar { height: 34px; background: #2a292e; display: flex; align-items: center; gap: 7px; padding: 0 13px; }
+  .bar i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .bar span { margin-left: 10px; font-size: 12.5px; color: #9b98a3; }
+  pre { font: 12.8px/1.55 "SF Mono", Menlo, monospace; color: #d9d6de; padding: 16px 18px 20px; white-space: pre-wrap; }
+  .h { color: #ffffff; font-weight: 700; }
+  .dim { color: #85828e; }
+  .t { color: #ffd479; }
+  .m { border-radius: 4px; padding: 0 3px; color: #fff; }
+  .r { background: rgba(255,59,48,.38); }
+  .b { background: rgba(10,132,255,.42); }
+  .img { color: #7ee0b5; }
+</style></head>
+<body>
+  <div class="col">
+    <div class="label"><span class="n">1</span>Talk and draw on your frozen screen <kbd>⌃⌥⌘S</kbd></div>
+    <img class="shot" src="../images/snapshot-frame.png">
+  </div>
+  <div class="arrow">→</div>
+  <div class="col">
+    <div class="label"><span class="n" style="background:#0a84ff">2</span>Paste into any agent <kbd>⌘V</kbd></div>
+    <div class="panel">
+      <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span>capture.md + frame_01.png</span></div>
+<pre><span class="h"># Screen capture · Snapshot · 0:19</span>
+
+<span class="dim">Numbered marks (#1, #2, …) drawn in the images are the
+user's own annotations; each is referenced in the
+transcript at the moment it was drawn.</span>
+
+Screenshots:
+- frame 1 · 1568×1018 · <span class="img">frame_01.png</span>
+
+<span class="h">## Transcript</span>
+
+<span class="t">**[00:00 · frame 1]**</span> Okay. Quick review of the run
+dashboard. This best <span class="m r">[#1 circled (303,290)-(452,340)]</span>
+accuracy says 312%. That has to be a units bug. It's
+probably multiplying by 100 twice. The legend
+<span class="m r">[#2 circled (1243,631)-(1465,785)]</span> here sits right on
+top of the curves. Can we move it below the chart? And
+this export <span class="m b">[#3 box around (290,908)-(425,966)]</span>
+button is floating down here. It should go
+<span class="m b">[#4 arrow from (446,910) pointing at (809,230)]</span> up
+next to the filters.</pre>
+    </div>
+  </div>
+</body></html>

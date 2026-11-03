@@ -1,0 +1,1 @@
+Okay, quick review of the run dashboard. This best accuracy says three hundred and twelve percent. That has to be a units bug, it's probably multiplying by a hundred twice. The legend here sits right on top of the curves, can we move it below the chart? And this export button is floating down here. It should go up next to the filters.

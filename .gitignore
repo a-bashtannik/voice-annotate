@@ -4,3 +4,5 @@ build/
 *.xcodeproj/
 DerivedData/
 .DS_Store
+docs/demo/screen.png
+docs/demo/narration.aiff
