@@ -12,11 +12,14 @@ public enum AnnotationRenderer {
 
     /// - Parameters:
     ///   - scale: canvas points → context units.
+    ///   - markScale: size of strokes and badges in context units per point; defaults to
+    ///     `scale`. A larger value keeps marks legible in strongly downscaled images.
     ///   - canvasSize: if given, badges are kept inside this canvas (in canvas points).
     public static func draw(
         _ a: Annotation,
         in ctx: CGContext,
         scale s: CGFloat = 1,
+        markScale: CGFloat? = nil,
         alpha: CGFloat = 1,
         showBadge: Bool = true,
         canvasSize: CGSize? = nil
@@ -28,60 +31,62 @@ public enum AnnotationRenderer {
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
 
+        let m = markScale ?? s
         let pts = a.points.map { CGPoint(x: $0.x * s, y: $0.y * s) }
-        let lw = CGFloat(a.lineWidth) * s
+        let lw = CGFloat(a.lineWidth) * m
         let color = a.color.cgColor
         let shadow = CGColor(gray: 0, alpha: 0.45)
 
         switch a.tool {
         case .pen:
-            ctx.setShadow(offset: CGSize(width: 0, height: 1 * s), blur: 3 * s, color: shadow)
+            ctx.setShadow(offset: CGSize(width: 0, height: 1 * m), blur: 3 * m, color: shadow)
             strokeSmooth(pts, in: ctx, width: lw, color: color)
         case .highlighter:
             ctx.setLineCap(.butt)
             strokeSmooth(pts, in: ctx, width: lw, color: a.color.withAlpha(0.38).cgColor)
         case .arrow:
-            ctx.setShadow(offset: CGSize(width: 0, height: 1 * s), blur: 3 * s, color: shadow)
+            ctx.setShadow(offset: CGSize(width: 0, height: 1 * m), blur: 3 * m, color: shadow)
             drawArrow(from: pts[0], to: pts[pts.count - 1], in: ctx, width: lw, color: color)
         case .rectangle:
-            ctx.setShadow(offset: CGSize(width: 0, height: 1 * s), blur: 3 * s, color: shadow)
+            ctx.setShadow(offset: CGSize(width: 0, height: 1 * m), blur: 3 * m, color: shadow)
             let r = rect(pts[0], pts[pts.count - 1])
-            ctx.addPath(CGPath(roundedRect: r, cornerWidth: min(4 * s, r.width / 2), cornerHeight: min(4 * s, r.height / 2), transform: nil))
+            ctx.addPath(CGPath(roundedRect: r, cornerWidth: min(4 * m, r.width / 2), cornerHeight: min(4 * m, r.height / 2), transform: nil))
             ctx.setStrokeColor(color)
             ctx.setLineWidth(lw)
             ctx.strokePath()
         case .ellipse:
-            ctx.setShadow(offset: CGSize(width: 0, height: 1 * s), blur: 3 * s, color: shadow)
+            ctx.setShadow(offset: CGSize(width: 0, height: 1 * m), blur: 3 * m, color: shadow)
             ctx.addEllipse(in: rect(pts[0], pts[pts.count - 1]))
             ctx.setStrokeColor(color)
             ctx.setLineWidth(lw)
             ctx.strokePath()
         case .pin:
-            drawBadge(number: a.id, center: pts[0], radius: CGFloat(Annotation.pinRadius) * s, color: a.color, in: ctx, scale: s)
+            drawBadge(number: a.id, center: pts[0], radius: CGFloat(Annotation.pinRadius) * m, color: a.color, in: ctx, scale: m)
             return
         }
 
         guard showBadge, a.id > 0 else { return }
-        var center = badgeCenter(for: a)
+        var center = badgeCenter(for: a, markFactor: m / s)
         if let canvasSize {
-            let r = Double(badgeRadius) + 2
+            let r = (Double(badgeRadius) + 2) * Double(m / s)
             center.x = min(max(center.x, r), canvasSize.width - r)
             center.y = min(max(center.y, r), canvasSize.height - r)
         }
         ctx.setShadow(offset: .zero, blur: 0, color: nil)
-        drawBadge(number: a.id, center: CGPoint(x: center.x * s, y: center.y * s), radius: badgeRadius * s, color: a.color, in: ctx, scale: s)
+        drawBadge(number: a.id, center: CGPoint(x: center.x * s, y: center.y * s), radius: badgeRadius * m, color: a.color, in: ctx, scale: m)
     }
 
     /// Badge position in canvas points: at the arrow's tail, else outside the top-left corner.
-    public static func badgeCenter(for a: Annotation) -> CGPoint {
-        let offset = Double(badgeRadius) + 4
+    /// `markFactor` = mark size relative to geometry (see `draw(markScale:)`).
+    public static func badgeCenter(for a: Annotation, markFactor: CGFloat = 1) -> CGPoint {
+        let offset = (Double(badgeRadius) + 4) * Double(markFactor)
         if a.tool == .arrow, let tail = a.points.first, let tip = a.points.last {
             let dx = tail.x - tip.x, dy = tail.y - tip.y
             let len = max(hypot(dx, dy), 0.001)
             return CGPoint(x: tail.x + dx / len * offset, y: tail.y + dy / len * offset)
         }
         let b = a.bounds
-        let pad = a.tool == .highlighter ? a.lineWidth / 2 : 0
+        let pad = a.tool == .highlighter ? a.lineWidth / 2 * Double(markFactor) : 0
         return CGPoint(x: b.minX - pad - offset * 0.7, y: b.minY - pad - offset * 0.7)
     }
 
@@ -177,6 +182,8 @@ public enum AnnotationRenderer {
 /// Offline image rendering: annotated screenshots, downscaling, crops, PNG output.
 public enum ImageRendering {
     static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+    /// Minimum output pixels per point for strokes and badges.
+    public static let minMarkScale: CGFloat = 1
 
     public static func makeContext(width: Int, height: Int) -> CGContext? {
         CGContext(
@@ -212,8 +219,11 @@ public enum ImageRendering {
         ctx.translateBy(x: 0, y: CGFloat(h))
         ctx.scaleBy(x: 1, y: -1)
         ctx.translateBy(x: -region.minX * s, y: -region.minY * s)
+        // Marks never shrink below their on-screen size, so badges stay readable when a
+        // large display is downscaled.
+        let markScale = max(s, minMarkScale)
         for a in annotations {
-            AnnotationRenderer.draw(a, in: ctx, scale: s, canvasSize: canvasSize)
+            AnnotationRenderer.draw(a, in: ctx, scale: s, markScale: markScale, canvasSize: canvasSize)
         }
         return ctx.makeImage()
     }

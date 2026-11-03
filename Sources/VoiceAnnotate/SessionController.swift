@@ -50,6 +50,19 @@ final class CaptureSession {
 /// Owns the lifecycle of a capture: start → record/annotate → finish → process → clipboard.
 /// Works across all connected displays: Snapshot freezes every display, Walkthrough records
 /// every display, and annotations can be drawn on any of them.
+// Task-group results are structs, not `(Int, …)` tuples: with tuples the display index
+// came back as 0 for every child task in release builds (Swift 6.3).
+private struct ShotResult {
+    let index: Int
+    let image: CGImage?
+    let error: Error?
+}
+
+private struct StoppedRecording {
+    let index: Int
+    let result: RecordingResult
+}
+
 @MainActor
 final class SessionController: NSObject, CanvasDelegate {
     enum Phase: Equatable {
@@ -134,20 +147,20 @@ final class SessionController: NSObject, CanvasDelegate {
         Task {
             var images: [Int: CGImage] = [:]
             var primaryError: Error?
-            await withTaskGroup(of: (Int, Result<CGImage, Error>).self) { group in
+            await withTaskGroup(of: ShotResult.self) { group in
                 for d in targets {
-                    let screen = d.screen
+                    let index = d.index, screen = d.screen
                     group.addTask { @MainActor in
-                        do { return (d.index, .success(try await Screenshotter.capture(screen: screen))) }
-                        catch { return (d.index, .failure(error)) }
+                        do { return ShotResult(index: index, image: try await Screenshotter.capture(screen: screen), error: nil) }
+                        catch { return ShotResult(index: index, image: nil, error: error) }
                     }
                 }
-                for await (index, result) in group {
-                    switch result {
-                    case let .success(image): images[index] = image
-                    case let .failure(error):
-                        Log.capture.error("Screenshot of display \(index) failed: \(error.localizedDescription, privacy: .public)")
-                        if index == primary.index { primaryError = error }
+                for await shot in group {
+                    if let image = shot.image {
+                        images[shot.index] = image
+                    } else if let error = shot.error {
+                        Log.capture.error("Screenshot of display \(shot.index) failed: \(error.localizedDescription, privacy: .public)")
+                        if shot.index == primary.index { primaryError = error }
                     }
                 }
             }
@@ -193,7 +206,9 @@ final class SessionController: NSObject, CanvasDelegate {
             canvases[displayIndex] = canvas
             panel.orderFrontRegardless()
         }
-        NSApp.activate(ignoringOtherApps: true)
+        // Nonactivating panels take key focus without activating the app; asking for
+        // activation instead is refused by macOS when the request isn't user-initiated,
+        // leaving keystrokes going to the previously frontmost app.
         if let key = overlays[primary.index] ?? overlays.values.first {
             key.makeKeyAndOrderFront(nil)
             if let canvas = canvases[primary.index] { key.makeFirstResponder(canvas) }
@@ -358,11 +373,11 @@ final class SessionController: NSObject, CanvasDelegate {
 
         Task {
             var recordings: [Int: RecordingResult] = [:]
-            await withTaskGroup(of: (Int, RecordingResult).self) { group in
+            await withTaskGroup(of: StoppedRecording.self) { group in
                 for (index, recorder) in recorders {
-                    group.addTask { (index, await recorder.stop()) }
+                    group.addTask { StoppedRecording(index: index, result: await recorder.stop()) }
                 }
-                for await (index, result) in group { recordings[index] = result }
+                for await stopped in group { recordings[stopped.index] = stopped.result }
             }
             let input = CaptureInput(
                 mode: mode, folder: session.folder, startDate: session.startDate, t0: session.t0,

@@ -112,6 +112,11 @@ final class AnnotationCanvasView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        // Keyboard shortcuts follow the display being drawn on.
+        if let window, !window.isKeyWindow, window.canBecomeKey {
+            window.makeKey()
+            window.makeFirstResponder(self)
+        }
         let p = point(event)
         let t = clock()
         if tool == .pin {

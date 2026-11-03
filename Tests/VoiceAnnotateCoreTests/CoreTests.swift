@@ -259,6 +259,20 @@ final class MarkdownComposerTests: XCTestCase {
         XCTAssertEqual(paras[1].text, "is broken here")
     }
 
+    func testSimultaneousFramesShareParagraph() {
+        let size = CGSize(width: 10, height: 10)
+        let frames = [
+            FrameRef(number: 1, time: 0.2, path: "/f1.png", pixelSize: size),
+            FrameRef(number: 2, time: 0.2, path: "/f2.png", pixelSize: size),
+            FrameRef(number: 3, time: 0.2, path: "/f3.png", pixelSize: size),
+            FrameRef(number: 4, time: 6, path: "/f4.png", pixelSize: size),
+        ]
+        let w = words("look here", start: 1) + words("and there", start: 6.5)
+        let paras = MarkdownComposer.transcriptParagraphs(frames: frames, words: w, markers: [])
+        XCTAssertEqual(paras.map(\.frames), [[1, 2, 3], [4]])
+        XCTAssertEqual(paras.map(\.text), ["look here", "and there"])
+    }
+
     func testLongPauseStartsNewParagraph() {
         let frames = [FrameRef(number: 1, time: 0, path: "/f.png", pixelSize: CGSize(width: 1, height: 1))]
         let w = words("first part", start: 0) + words("second part", start: 10)

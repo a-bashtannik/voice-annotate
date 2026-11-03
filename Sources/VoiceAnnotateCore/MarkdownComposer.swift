@@ -75,8 +75,11 @@ public struct CaptureDocument: Sendable {
 
 public struct TranscriptParagraph: Equatable, Sendable {
     public var time: Double
-    public var frame: Int?
+    /// Frames starting at this paragraph (several when displays were captured together).
+    public var frames: [Int]
     public var text: String
+
+    public var frame: Int? { frames.first }
 }
 
 public enum MarkdownComposer {
@@ -134,7 +137,11 @@ public enum MarkdownComposer {
         }
         for p in paragraphs {
             var header = "**[\(Timecode.clock(p.time))"
-            if let frame = p.frame { header += " · frame \(frame)" }
+            if p.frames.count == 1 {
+                header += " · frame \(p.frames[0])"
+            } else if !p.frames.isEmpty {
+                header += " · frames " + p.frames.map(String.init).joined(separator: ", ")
+            }
             header += "]**"
             out.append(p.text.isEmpty ? header : "\(header) \(p.text)")
             out.append("")
@@ -184,16 +191,21 @@ public enum MarkdownComposer {
         for item in events {
             switch item.event {
             case let .frame(f):
-                flush()
-                current = TranscriptParagraph(time: f.time, frame: f.number, text: "")
+                // Frames taken at the same moment (one per display) share a paragraph.
+                if let c = current, !c.frames.isEmpty, c.text.isEmpty, abs(c.time - f.time) < 0.05 {
+                    current?.frames.append(f.number)
+                } else {
+                    flush()
+                    current = TranscriptParagraph(time: f.time, frames: [f.number], text: "")
+                }
             case let .marker(m):
-                if current == nil { current = TranscriptParagraph(time: m.time, frame: nil, text: "") }
+                if current == nil { current = TranscriptParagraph(time: m.time, frames: [], text: "") }
                 current?.text += " [\(m.text)]"
             case let .word(w):
                 let pause = lastWordEnd.map { w.start - $0 } ?? 0
                 if current == nil || (pause > paragraphPause && !(current?.text.isEmpty ?? true)) {
                     flush()
-                    current = TranscriptParagraph(time: w.start, frame: nil, text: "")
+                    current = TranscriptParagraph(time: w.start, frames: [], text: "")
                 }
                 let text = w.text.hasPrefix(" ") ? w.text : " " + w.text
                 current?.text += text
