@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- README pipeline diagram. Rendered by render.sh. -->
+<html><head><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 520px; overflow: hidden; }
+  body { font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; background: #f4f1ec; color: #2c2925; display: flex; align-items: center; justify-content: center; gap: 0; padding: 0 30px; }
+  .stage { display: flex; flex-direction: column; gap: 12px; width: 375px; }
+  .stage h3 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #8a8175; font-weight: 700; padding-left: 4px; }
+  .box { background: #fff; border: 1px solid #e2dcd2; border-radius: 12px; padding: 13px 16px; box-shadow: 0 2px 6px rgba(40,30,20,.05); }
+  .box b { display: block; font-size: 16px; font-weight: 650; }
+  .box span { display: block; font-size: 13.5px; color: #6f675d; margin-top: 3px; line-height: 1.4; }
+  .box.red { border-left: 4px solid #ff3b30; }
+  .box.blue { border-left: 4px solid #0a84ff; }
+  .box.dark { background: #1c1b1f; border-color: #1c1b1f; color: #eee; }
+  .box.dark span { color: #a29fab; }
+  .box.dark code { font: 600 15px "SF Mono", Menlo, monospace; color: #fff; }
+  .clock { margin-top: 6px; font-size: 13px; color: #8a8175; padding-left: 4px; }
+  .clock code { font: 12.5px "SF Mono", Menlo, monospace; }
+  .arrow { width: 70px; text-align: center; font-size: 34px; color: #b5ab9c; }
+</style></head>
+<body>
+  <div class="stage">
+    <h3>Capture</h3>
+    <div class="box red"><b>Screen</b><span>ScreenCaptureKit: frozen screenshots, or an HEVC stream per display with live 64×40 diff thumbnails</span></div>
+    <div class="box red"><b>Voice</b><span>AVAudioEngine, 16 kHz mono</span></div>
+    <div class="box red"><b>Overlay</b><span>Strokes, clicks and which display the cursor is on</span></div>
+    <div class="clock">All stamped on one host clock (<code>mach_absolute_time</code>)</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="stage">
+    <h3>Process (on-device)</h3>
+    <div class="box blue"><b>WhisperKit</b><span>Whisper large-v3 turbo, word-level timestamps</span></div>
+    <div class="box blue"><b>Keyframe selector</b><span>Walkthrough video → storyboard: settles, clicks, marks, speech</span></div>
+    <div class="box blue"><b>Shape classifier</b><span>Loop → circled, line → underline, tap → pin; canvas → image pixels</span></div>
+    <div class="box blue"><b>Renderer</b><span>Marks, numbered badges, detail crops on 4K/6K displays</span></div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="stage">
+    <h3>Bundle → clipboard</h3>
+    <div class="box dark"><code>capture.md</code><span>Transcript with each mark cited at the word it was drawn: [#2 circled (x1,y1)-(x2,y2) in frame 1]</span></div>
+    <div class="box dark"><code>frame_NN.png</code><span>Annotated frames and detail crops</span></div>
+    <div class="box"><b>One pasteboard write</b><span>Terminals read the text and paths; web and Electron chats attach the images and capture.md</span></div>
+  </div>
+</body></html>

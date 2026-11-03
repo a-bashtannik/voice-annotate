@@ -51,31 +51,7 @@ everything else is the actual pipeline ([example capture.md](docs/demo/example-c
 
 ## How it works
 
-```mermaid
-flowchart TB
-    hk([Hotkey]) --> cap
-    subgraph cap [Capture, all on one host clock]
-        direction LR
-        scr[ScreenCaptureKit<br/>screenshots / HEVC per display]
-        mic[AVAudioEngine<br/>16 kHz mic]
-        ovl[Overlay<br/>strokes, clicks, cursor display]
-    end
-    cap --> proc
-    subgraph proc [Processing]
-        direction LR
-        asr[WhisperKit<br/>word timestamps]
-        kf[Keyframe selector<br/>walkthrough only]
-        shp[Shape classifier<br/>+ coordinate mapping]
-        ren[Renderer<br/>marks, badges, detail crops]
-    end
-    proc --> out
-    subgraph out [Bundle]
-        direction LR
-        md[capture.md<br/>transcript with mark refs]
-        png[frame_NN.png]
-    end
-    out --> clip([Clipboard])
-```
+![Pipeline: capture (screen, voice, overlay on one clock) → on-device processing (WhisperKit, keyframes, shape classifier, renderer) → capture.md and frames on the clipboard](docs/images/pipeline.png)
 
 Some of the design decisions:
 
