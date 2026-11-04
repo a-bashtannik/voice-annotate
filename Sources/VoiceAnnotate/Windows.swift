@@ -38,92 +38,131 @@ struct SettingsView: View {
             transcription.tabItem { Label("Transcription", systemImage: "waveform") }
             shortcuts.tabItem { Label("Shortcuts", systemImage: "keyboard") }
         }
-        .padding(20)
-        .frame(width: 560, height: 400)
+        .frame(width: 560, height: 540)
+    }
+
+    /// Value text plus a bare stepper, so the row label stays short and aligned.
+    private func stepper(_ title: String, value: Binding<Int>, in range: ClosedRange<Int>, format: @escaping (Int) -> String) -> some View {
+        LabeledContent(title) {
+            HStack(spacing: 6) {
+                Text(format(value.wrappedValue)).monospacedDigit()
+                Stepper(title, value: value, in: range).labelsHidden()
+            }
+        }
     }
 
     private var general: some View {
         Form {
-            Picker("Clipboard format", selection: $settings.clipboardFormat) {
-                ForEach(ClipboardFormat.allCases) { Text($0.title).tag($0) }
+            Section {
+                Picker("Clipboard format", selection: $settings.clipboardFormat) {
+                    ForEach(ClipboardFormat.allCases) { Text($0.title).tag($0) }
+                }
+            } footer: {
+                Text("Every format is also available later from the menu bar → Recent captures.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Text("Every format is also available later from the menu bar → Recent captures.")
-                .font(.caption).foregroundStyle(.secondary)
-            Stepper("Keep captures for \(settings.retentionDays) days", value: $settings.retentionDays, in: 1...365)
-            Toggle("Play sounds", isOn: $settings.playSounds)
-            Toggle("Launch at login", isOn: Binding(get: { settings.launchAtLogin }, set: { settings.launchAtLogin = $0 }))
-            HStack {
-                Text("Captures are stored in")
-                Button("~/.voice-annotate/captures") { NSWorkspace.shared.open(Paths.captures) }
-                    .buttonStyle(.link)
+            Section {
+                stepper("Keep captures for", value: $settings.retentionDays, in: 1...365) { "\($0) days" }
+                LabeledContent("Stored in") {
+                    Button("~/.voice-annotate/captures") { NSWorkspace.shared.open(Paths.captures) }
+                        .buttonStyle(.link)
+                }
+            }
+            Section {
+                Toggle("Play sounds", isOn: $settings.playSounds)
+                Toggle("Launch at login", isOn: Binding(get: { settings.launchAtLogin }, set: { settings.launchAtLogin = $0 }))
             }
         }
+        .formStyle(.grouped)
     }
 
     private var capture: some View {
         Form {
-            Stepper("Max keyframes per walkthrough: \(settings.maxFrames)", value: $settings.maxFrames, in: 4...80)
-            Picker("Image size (long edge)", selection: $settings.imageLongEdge) {
-                Text("1092 px (smallest)").tag(1092)
-                Text("1568 px (recommended for Claude)").tag(1568)
-                Text("2048 px").tag(2048)
-                Text("2560 px").tag(2560)
+            Section("Images") {
+                Picker("Image size (long edge)", selection: $settings.imageLongEdge) {
+                    Text("1092 px (smallest)").tag(1092)
+                    Text("1568 px (recommended for Claude)").tag(1568)
+                    Text("2048 px").tag(2048)
+                    Text("2560 px").tag(2560)
+                }
+                Toggle(isOn: $settings.allDisplays) {
+                    Text("Capture all displays")
+                    Text("Draw on any display; walkthroughs follow the cursor.")
+                }
+                Toggle("Add zoomed detail crops on large displays", isOn: $settings.detailCrops)
+                Toggle("Also keep un-annotated screenshots", isOn: $settings.keepOriginals)
             }
-            Toggle("Capture all displays (draw on any, walkthrough follows the cursor)", isOn: $settings.allDisplays)
-            Toggle("Add zoomed detail crops on large displays", isOn: $settings.detailCrops)
-            Toggle("Also keep un-annotated screenshots", isOn: $settings.keepOriginals)
-            Stepper("Max walkthrough length: \(settings.maxWalkthroughMinutes) min", value: $settings.maxWalkthroughMinutes, in: 1...60)
-            Picker("Walkthrough draw mode", selection: $settings.drawModifier) {
-                ForEach(DrawModifier.allCases) { Text($0.title).tag($0) }
-            }
-            HStack {
-                Text("Annotations fade after")
-                Slider(value: $settings.fadeSeconds, in: 1...10, step: 0.5)
-                Text(String(format: "%.1f s", settings.fadeSeconds)).monospacedDigit().frame(width: 44)
+            Section("Walkthrough") {
+                stepper("Max keyframes", value: $settings.maxFrames, in: 4...80) { "\($0)" }
+                stepper("Max length", value: $settings.maxWalkthroughMinutes, in: 1...60) { "\($0) min" }
+                Picker("Draw mode", selection: $settings.drawModifier) {
+                    ForEach(DrawModifier.allCases) { Text($0.title).tag($0) }
+                }
+                LabeledContent("Annotations fade after") {
+                    HStack {
+                        Slider(value: $settings.fadeSeconds, in: 1...10, step: 0.5).frame(width: 160)
+                        Text(String(format: "%.1f s", settings.fadeSeconds)).monospacedDigit().frame(width: 40, alignment: .trailing)
+                    }
+                }
             }
         }
+        .formStyle(.grouped)
     }
 
     private var transcription: some View {
         Form {
-            Picker("Whisper model", selection: $settings.model) {
-                ForEach(WhisperModel.allCases) { Text($0.title).tag($0) }
+            Section {
+                Picker("Whisper model", selection: $settings.model) {
+                    ForEach(WhisperModel.allCases) { Text($0.title).tag($0) }
+                }
+                Picker("Run on", selection: $settings.compute) {
+                    ForEach(WhisperCompute.allCases) { Text($0.title).tag($0) }
+                }
+                LabeledContent("Status") {
+                    HStack(spacing: 6) {
+                        if case .downloading = transcriber.status { ProgressView().controlSize(.small) }
+                        if transcriber.status == .loading || transcriber.status == .ready(optimizing: true) { ProgressView().controlSize(.small) }
+                        Text(transcriber.status.title)
+                    }
+                }
+            } footer: {
+                Text("Runs fully on-device with WhisperKit. Models live in ~/.voice-annotate/models.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Picker("Run on", selection: $settings.compute) {
-                ForEach(WhisperCompute.allCases) { Text($0.title).tag($0) }
-            }
-            HStack {
-                Text(transcriber.status.title).font(.caption).foregroundStyle(.secondary)
-                if case .downloading = transcriber.status { ProgressView().controlSize(.small) }
-                if transcriber.status == .loading || transcriber.status == .ready(optimizing: true) { ProgressView().controlSize(.small) }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Custom vocabulary")
+            Section {
                 TextEditor(text: $settings.vocabulary)
                     .font(.system(size: 12))
-                    .frame(height: 70)
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
+                    .frame(height: 60)
+            } header: {
+                Text("Custom vocabulary")
+            } footer: {
                 Text("Names, jargon and identifiers you say often (e.g. \"SwiftUI, PyTorch, SLURM, WhisperKit\"). Passed to Whisper as a prompt.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Text("Runs fully on-device with WhisperKit. Models live in ~/.voice-annotate/models.")
-                .font(.caption).foregroundStyle(.secondary)
         }
+        .formStyle(.grouped)
     }
 
     private var shortcuts: some View {
         Form {
-            ForEach(HotkeyAction.allCases, id: \.self) { action in
+            Section {
+                ForEach(HotkeyAction.allCases, id: \.self) { action in
+                    LabeledContent(action.title) {
+                        HotkeyRecorder(action: action, settings: settings)
+                    }
+                }
+            } footer: {
                 HStack {
-                    Text(action.title)
                     Spacer()
-                    HotkeyRecorder(action: action, settings: settings)
+                    Button("Reset to defaults") { settings.resetHotkeys() }
                 }
             }
-            Button("Reset to defaults") { settings.resetHotkeys() }
-            Text("Snapshot overlay keys: P pen · A arrow · R box · O ellipse · H highlighter · N pin · 1–6 colors · ⌘Z undo · ⇥ next shot · ↩ finish · ⎋ cancel. Tapping with the pen drops a pin.")
-                .font(.caption).foregroundStyle(.secondary)
+            Section("Snapshot overlay keys") {
+                Text("P pen · A arrow · R box · O ellipse · H highlighter · N pin · 1–6 colors · ⌘Z undo · ⇥ next shot · ↩ finish · ⎋ cancel. Tapping with the pen drops a pin.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
         }
+        .formStyle(.grouped)
     }
 }
 
@@ -134,10 +173,11 @@ struct HotkeyRecorder: View {
     @State private var monitor: Any?
 
     var body: some View {
-        Button(recording ? "Press shortcut…" : settings.hotkey(for: action).display) {
+        Button {
             recording ? stop() : start()
+        } label: {
+            Text(recording ? "Press shortcut…" : settings.hotkey(for: action).display).frame(minWidth: 110)
         }
-        .frame(minWidth: 120)
         .onDisappear { stop() }
     }
 
