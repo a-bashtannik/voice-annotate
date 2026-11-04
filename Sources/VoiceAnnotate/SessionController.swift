@@ -66,9 +66,9 @@ private struct StoppedRecording {
 @MainActor
 final class SessionController: NSObject, CanvasDelegate {
     enum Phase: Equatable {
-        case idle, snapshot, snapshotNavigating, walkthrough, processing
+        case idle, snapshot, snapshotNavigating, walkthrough, dictation, processing
 
-        var isCapturing: Bool { self == .snapshot || self == .snapshotNavigating || self == .walkthrough }
+        var isCapturing: Bool { self == .snapshot || self == .snapshotNavigating || self == .walkthrough || self == .dictation }
     }
 
     private(set) var phase: Phase = .idle {
@@ -89,6 +89,7 @@ final class SessionController: NSObject, CanvasDelegate {
     private var hudScreen: NSScreen?
     private let hudModel = HUDModel()
     private var audio: AudioRecorder?
+    private var live: LiveTranscriber?
     private var recorders: [Int: WalkthroughRecorder] = [:]
     private var clickMonitor: Any?
     private var ticker: Timer?
@@ -116,6 +117,8 @@ final class SessionController: NSObject, CanvasDelegate {
         case (.snapshot, .snapshotNavigating): captureRound()
         case (.walkthrough, .idle): startWalkthrough()
         case (.walkthrough, .walkthrough): finish()
+        case (.dictation, .idle): startDictation()
+        case (.dictation, .dictation): finish()
         case (.finish, _) where phase.isCapturing: finish()
         case (.toggleDraw, .walkthrough): hudModel.drawToggled.toggle()
         case (_, .processing): Toast.shared.show("Still processing the last capture…", busy: true, duration: 1.5)
@@ -306,6 +309,91 @@ final class SessionController: NSObject, CanvasDelegate {
         startTicker()
     }
 
+    // MARK: Dictation
+
+    func startDictation() {
+        guard phase == .idle else { return }
+        guard Permissions.microphoneStatus != .denied, Permissions.microphoneStatus != .restricted else {
+            Toast.shared.show("Microphone access needed", detail: "System Settings → Privacy & Security → Microphone", success: false, duration: 4)
+            return
+        }
+        guard let session = makeSession(.dictation) else { return }
+        phase = .dictation
+        resetHUD(mode: .dictation)
+        showHUD(on: session.cursorDisplay.screen)
+        startAudio(for: session)
+    }
+
+    private func finishDictation(_ session: CaptureSession) {
+        phase = .processing
+        let audioResult = audio?.stop()
+        audio = nil
+        let live = self.live
+        self.live = nil
+        let screen = hudScreen
+        teardownUI()
+        Sounds.stop()
+        Toast.shared.show("Transcribing…", busy: true, duration: nil, on: screen)
+
+        Task {
+            let samples = audioResult?.samples ?? []
+            var transcript = await live?.finish(samples: samples)
+            var failure: Error?
+            if transcript == nil, !samples.isEmpty {
+                do {
+                    transcript = try await Transcriber.shared.transcribe(samples, model: self.settings.model.rawValue, vocabulary: self.settings.vocabulary)
+                } catch {
+                    failure = error
+                }
+            }
+            let text = transcript?.plainText ?? ""
+            Self.saveDictation(samples, text: text, in: session.folder)
+            if let failure {
+                Log.transcribe.error("Dictation failed: \(failure.localizedDescription, privacy: .public)")
+                Toast.shared.show("Transcription failed", detail: failure.localizedDescription, success: false, duration: 5, on: screen)
+                Sounds.error()
+            } else if text.isEmpty {
+                Toast.shared.show("No speech detected", success: false, duration: 2.5, on: screen)
+            } else {
+                do {
+                    try ClipboardWriter.writeText(text)
+                    let words = text.split(whereSeparator: \.isWhitespace).count
+                    Toast.shared.show("Copied to clipboard", detail: "\(words) words", duration: 2.5, on: screen)
+                    Sounds.done()
+                } catch {
+                    Toast.shared.show("Copy failed", detail: error.localizedDescription, success: false, duration: 4, on: screen)
+                    Sounds.error()
+                }
+            }
+            self.session = nil
+            self.phase = .idle
+        }
+    }
+
+    /// Keeps the audio and text in the capture folder (pruned like captures) in case the
+    /// clipboard gets overwritten.
+    private static func saveDictation(_ samples: [Float], text: String, in folder: URL) {
+        do {
+            guard !samples.isEmpty else {
+                try FileManager.default.removeItem(at: folder)
+                return
+            }
+            if !text.isEmpty {
+                try text.write(to: folder.appendingPathComponent("transcript.txt"), atomically: true, encoding: .utf8)
+            }
+        } catch {
+            Log.app.error("Saving dictation failed: \(error.localizedDescription, privacy: .public)")
+        }
+        guard !samples.isEmpty else { return }
+        Task.detached(priority: .utility) {
+            do {
+                try AudioRecorder.writeM4A(samples, to: folder.appendingPathComponent("audio.m4a"))
+            } catch {
+                Log.audio.error("Writing audio failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     private func recordClick() {
         guard phase == .walkthrough, let session else { return }
         let p = NSEvent.mouseLocation
@@ -351,12 +439,18 @@ final class SessionController: NSObject, CanvasDelegate {
 
     func finish() {
         guard let session, phase.isCapturing else { return }
+        if session.mode == .dictation {
+            finishDictation(session)
+            return
+        }
         if phase == .walkthrough && hudModel.starting { return }
         phase = .processing
         let mode = session.mode
         let duration = session.now()
         let audioResult = audio?.stop()
         audio = nil
+        let live = self.live
+        self.live = nil
         let recorders = self.recorders
         self.recorders = [:]
         let screen = hudScreen
@@ -379,7 +473,8 @@ final class SessionController: NSObject, CanvasDelegate {
                 }
                 for await stopped in group { recordings[stopped.index] = stopped.result }
             }
-            let input = CaptureInput(
+            let transcript = await live?.finish(samples: audioResult?.samples ?? [])
+            var input = CaptureInput(
                 mode: mode, folder: session.folder, startDate: session.startDate, t0: session.t0,
                 duration: duration, annotations: session.annotations, clicks: session.clicks,
                 shots: session.shots, displays: session.displays.map(\.info), audio: audioResult,
@@ -389,6 +484,7 @@ final class SessionController: NSObject, CanvasDelegate {
                 detailCrops: self.settings.detailCrops, keepOriginals: self.settings.keepOriginals,
                 fadeSeconds: self.settings.fadeSeconds
             )
+            input.transcript = transcript
             do {
                 let capture = try await CaptureProcessor.process(input)
                 try ClipboardWriter.write(capture, format: self.settings.clipboardFormat)
@@ -413,6 +509,8 @@ final class SessionController: NSObject, CanvasDelegate {
         let mode = session.mode
         _ = audio?.stop()
         audio = nil
+        live?.cancel()
+        live = nil
         let recorders = Array(self.recorders.values)
         self.recorders = [:]
         teardownUI()
@@ -570,7 +668,12 @@ final class SessionController: NSObject, CanvasDelegate {
             do {
                 try recorder.start()
                 audio = recorder
+                live = LiveTranscriber(recorder: recorder, model: settings.model.rawValue, vocabulary: settings.vocabulary)
                 hudModel.micAvailable = true
+                if session.mode == .dictation {
+                    hudModel.starting = false
+                    Sounds.start()
+                }
             } catch {
                 Log.audio.error("Microphone start failed: \(error.localizedDescription, privacy: .public)")
                 hudModel.micAvailable = false

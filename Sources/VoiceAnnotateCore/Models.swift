@@ -4,11 +4,14 @@ import Foundation
 public enum CaptureMode: String, Codable, Sendable {
     case snapshot
     case walkthrough
+    /// Voice only: the transcript goes to the clipboard as plain text, no bundle markdown.
+    case dictation
 
     public var title: String {
         switch self {
         case .snapshot: return "Snapshot"
         case .walkthrough: return "Walkthrough"
+        case .dictation: return "Dictation"
         }
     }
 }

@@ -43,12 +43,13 @@ struct Hotkey: Codable, Equatable {
 }
 
 enum HotkeyAction: String, CaseIterable {
-    case snapshot, walkthrough, finish, toggleDraw
+    case snapshot, walkthrough, dictation, finish, toggleDraw
 
     var title: String {
         switch self {
         case .snapshot: return "Snapshot (start / next shot)"
         case .walkthrough: return "Walkthrough (start / stop)"
+        case .dictation: return "Dictation, voice only (start / stop)"
         case .finish: return "Finish capture"
         case .toggleDraw: return "Toggle draw mode (Walkthrough)"
         }
@@ -58,6 +59,7 @@ enum HotkeyAction: String, CaseIterable {
         switch self {
         case .snapshot: return Hotkey(keyCode: UInt32(kVK_ANSI_S), carbonModifiers: Hotkey.hyper, keyLabel: "S")
         case .walkthrough: return Hotkey(keyCode: UInt32(kVK_ANSI_R), carbonModifiers: Hotkey.hyper, keyLabel: "R")
+        case .dictation: return Hotkey(keyCode: UInt32(kVK_ANSI_T), carbonModifiers: Hotkey.hyper, keyLabel: "T")
         case .finish: return Hotkey(keyCode: UInt32(kVK_ANSI_F), carbonModifiers: Hotkey.hyper, keyLabel: "F")
         case .toggleDraw: return Hotkey(keyCode: UInt32(kVK_ANSI_D), carbonModifiers: Hotkey.hyper, keyLabel: "D")
         }
@@ -130,18 +132,18 @@ enum WhisperCompute: String, CaseIterable, Identifiable {
 }
 
 enum ClipboardFormat: String, CaseIterable, Identifiable {
-    case universal, textAndPaths, imagesAndText, imagesOnly, composite, markdownFile
+    case markdownFile, universal, textAndPaths, imagesAndText, imagesOnly, composite
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .universal: return "Universal (text, capture.md + images)"
-        case .textAndPaths: return "Text with image paths (terminal agents)"
-        case .imagesAndText: return "Images first, then text (web chats)"
+        case .markdownFile: return "capture.md only (agents that read files)"
+        case .universal: return "capture.md + images (web chats)"
+        case .textAndPaths: return "Text with image paths"
+        case .imagesAndText: return "Images first, then text"
         case .imagesOnly: return "Images only"
         case .composite: return "Single composite image"
-        case .markdownFile: return "capture.md as a file"
         }
     }
 }
@@ -188,7 +190,7 @@ final class AppSettings: ObservableObject {
         drawModifier = DrawModifier(rawValue: d.string(forKey: "drawModifier") ?? "") ?? .controlOption
         allDisplays = d.object(forKey: "allDisplays") as? Bool ?? true
         keepOriginals = d.object(forKey: "keepOriginals") as? Bool ?? false
-        clipboardFormat = ClipboardFormat(rawValue: d.string(forKey: "clipboardFormat") ?? "") ?? .universal
+        clipboardFormat = ClipboardFormat(rawValue: d.string(forKey: "clipboardFormat") ?? "") ?? .markdownFile
         retentionDays = d.object(forKey: "retentionDays") as? Int ?? 14
         playSounds = d.object(forKey: "playSounds") as? Bool ?? true
         onboardingShown = d.object(forKey: "onboardingShown") as? Bool ?? false

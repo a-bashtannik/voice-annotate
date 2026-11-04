@@ -4,6 +4,12 @@ import VoiceAnnotateCore
 
 @MainActor
 enum ClipboardWriter {
+    static func writeText(_ text: String) throws {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        guard pb.setString(text, forType: .string) else { throw AppError("Writing to the clipboard failed") }
+    }
+
     static func write(_ capture: RecentCapture, format: ClipboardFormat) throws {
         let markdown = try String(contentsOf: capture.markdownURL, encoding: .utf8)
         let fm = FileManager.default

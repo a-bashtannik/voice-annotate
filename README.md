@@ -34,6 +34,8 @@ everything else is the actual pipeline ([example capture.md](docs/demo/example-c
   laser-pointer marks that fade away. Agents can't watch video, so the recording becomes an
   adaptive keyframe storyboard (up to 30 frames), picked from screen changes, clicks, speech
   and annotations.
+- **Dictation** (`⌃⌥⌘T`) records only your voice and copies the plain transcript, for
+  prompts you'd rather say than type.
 - **Smart pen.** Strokes are classified when you let go: a closed loop becomes *circled*,
   a straight stroke an *underline*, and a tap a *pin*. There are also arrow, box, ellipse,
   highlighter and pin tools.
@@ -43,9 +45,10 @@ everything else is the actual pipeline ([example capture.md](docs/demo/example-c
   position decides which display a keyframe comes from.
 - **Detail crops.** On 4K/6K displays, annotated regions also get a native-resolution crop,
   so small text stays readable after downscaling.
-- **Pastes anywhere.** One clipboard write works in terminals like Claude Code, which read
-  the text and the image paths. It also works in Electron and web chats, which attach the
-  images plus `capture.md`. Alternative formats are under *Recent captures*.
+- **Light on the chat.** By default the clipboard gets the transcript plus `capture.md`, not
+  the images. Agents that can read files (Claude Code in the terminal or desktop app) open
+  the frame paths listed in it when they need them. For web chats, *Recent captures* →
+  *capture.md + images* attaches the frames too.
 - **Fully local.** Transcription runs with [WhisperKit](https://github.com/argmaxinc/WhisperKit)
   (Whisper large-v3 turbo) on the GPU or Neural Engine. Nothing leaves the machine.
 
@@ -64,9 +67,12 @@ Some of the design decisions:
   onsets and a periodic fallback. They are scored and spaced at least 1.2 s apart.
   Annotated frames are always kept, and near-duplicates are dropped.
   [SPEC.md §4](SPEC.md#4-walkthrough--keyframe-storyboard) has the details.
+- **Transcribed while you talk.** The recording is cut at pauses into 15–30 s pieces, and
+  each piece is transcribed in the background as soon as it's cut. When you finish, only the
+  last piece is left, so the wait no longer grows with the recording's length.
 - **Pasteboard pragmatics.** Different apps read a mixed pasteboard differently. Terminals
-  take the text, and Electron chats take the files and silently drop the text. So item 0
-  carries both the transcript text and a file URL to `capture.md`.
+  take the text, and Electron chats take the files and silently drop the text. So the
+  clipboard item carries both the transcript text and a file URL to `capture.md`.
 - **Responsive while capturing.** The overlay is a nonactivating `NSPanel` that takes key
   focus without activating the app. The model is preloaded at launch. Auto compute starts on
   a GPU build (about 0.25× real time) while the Neural Engine build (about 0.08×) compiles
@@ -84,6 +90,7 @@ The full design is in [SPEC.md](SPEC.md).
 |---|---|
 | `⌃⌥⌘S` | **Snapshot.** Freezes all displays; draw and talk. `⇥` hides the overlay so you can navigate, `⌃⌥⌘S` takes the next shot, `↩` finishes, `⎋` cancels |
 | `⌃⌥⌘R` | **Walkthrough.** Records all displays while you work. Hold `⌃⌥` (or toggle with `⌃⌥⌘D`) to draw; `⌃⌥⌘R` again finishes |
+| `⌃⌥⌘T` | **Dictation.** Voice only; `⌃⌥⌘T` again copies the transcript as plain text |
 | `⌃⌥⌘F` | Finish any capture |
 
 Snapshot tool keys: `P` smart pen · `A` arrow · `R` box · `O` ellipse · `H` highlighter ·
@@ -107,7 +114,8 @@ On first launch, grant **Screen Recording** (then relaunch) and **Microphone**. 
 model (~630 MB) downloads to `~/.voice-annotate/models` on first start.
 
 The binary also has developer commands, e.g. `.build/debug/VoiceAnnotate --help`:
-`--transcribe <audio>`, `--render-demo <out.png>`, `--demo-snapshot <audio> [screenshot annotations]`,
+`--transcribe <audio>`, `--live-transcribe <audio>` (replays a file in real time through the
+live transcriber), `--render-demo <out.png>`, `--demo-snapshot <audio> [screenshot annotations]`,
 `--test-screenshot [screen]`, `--test-walkthrough <seconds> [screen|all]`.
 `docs/demo/render.sh` regenerates the README images with the real pipeline.
 

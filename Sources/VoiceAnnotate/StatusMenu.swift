@@ -51,12 +51,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         case .idle: symbol = "viewfinder"
         case .snapshot, .snapshotNavigating: symbol = "camera.viewfinder"
         case .walkthrough: symbol = "record.circle"
+        case .dictation: symbol = "mic.circle"
         case .processing: symbol = "hourglass"
         }
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "voice-annotate")
         image?.isTemplate = true
         button.image = image
-        button.contentTintColor = phase == .walkthrough ? .systemRed : nil
+        button.contentTintColor = phase == .walkthrough || phase == .dictation ? .systemRed : nil
     }
 
     private func updateTooltip(_ status: Transcriber.Status) {
@@ -77,10 +78,15 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             let walk = ClosureMenuItem("Walkthrough  \(settings.hotkey(for: .walkthrough).display)") { [weak self] in
                 self?.controller.startWalkthrough()
             }
+            let dictate = ClosureMenuItem("Dictation  \(settings.hotkey(for: .dictation).display)") { [weak self] in
+                self?.controller.startDictation()
+            }
             snap.isEnabled = phase == .idle
             walk.isEnabled = phase == .idle
+            dictate.isEnabled = phase == .idle
             menu.addItem(snap)
             menu.addItem(walk)
+            menu.addItem(dictate)
         }
 
         menu.addItem(.separator())

@@ -440,3 +440,37 @@ final class MultiDisplayTests: XCTestCase {
         XCTAssertTrue(md.contains("several displays"))
     }
 }
+
+final class ChunkPlannerTests: XCTestCase {
+    let rate = 1000.0
+
+    /// "Speech" (a 0.2 amplitude tone) with silent gaps at the given (start, end) seconds.
+    func audio(seconds: Double, gaps: [(Double, Double)]) -> [Float] {
+        (0..<Int(seconds * rate)).map { i in
+            let t = Double(i) / rate
+            if gaps.contains(where: { t >= $0.0 && t < $0.1 }) { return 0 }
+            return Float(0.2 * sin(t * 2 * .pi * 90))
+        }
+    }
+
+    func testWaitsUntilMinimumLength() {
+        XCTAssertNil(ChunkPlanner.cutPoint(audio(seconds: 12, gaps: [(5, 6)]), sampleRate: rate))
+    }
+
+    func testCutsInsideThePause() throws {
+        let cut = try XCTUnwrap(ChunkPlanner.cutPoint(audio(seconds: 25, gaps: [(5, 6), (18, 18.8)]), sampleRate: rate))
+        // Only pauses after the minimum length count; the cut lands inside the one at 18 s.
+        XCTAssertGreaterThan(Double(cut) / rate, 18.1)
+        XCTAssertLessThan(Double(cut) / rate, 18.7)
+    }
+
+    func testWaitsForAPauseBeforeMaximum() {
+        XCTAssertNil(ChunkPlanner.cutPoint(audio(seconds: 25, gaps: []), sampleRate: rate))
+    }
+
+    func testForcesACutAtMaximumWithoutPause() throws {
+        let cut = try XCTUnwrap(ChunkPlanner.cutPoint(audio(seconds: 31, gaps: []), sampleRate: rate))
+        XCTAssertGreaterThanOrEqual(Double(cut) / rate, ChunkPlanner.minSeconds)
+        XCTAssertLessThanOrEqual(Double(cut) / rate, ChunkPlanner.maxSeconds)
+    }
+}

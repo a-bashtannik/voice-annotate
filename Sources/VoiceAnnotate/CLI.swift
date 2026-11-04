@@ -7,6 +7,7 @@ enum CLI {
     static let usage = """
     voice-annotate developer commands:
       --transcribe <audio-file> [model]      Transcribe a file, print word timings
+      --live-transcribe <audio-file>         Replay a file in real time through live transcription
       --render-demo <out.png>                Render every annotation type onto a test image
       --demo-snapshot <audio-file> [screenshot.png annotations.json]
                                              Full Snapshot pipeline on a synthetic (or given @2x) screenshot
@@ -20,6 +21,8 @@ enum CLI {
                 switch args[0] {
                 case "--transcribe" where args.count >= 2:
                     try await transcribe(path: args[1], model: args.count >= 3 ? args[2] : AppSettings.shared.model.rawValue)
+                case "--live-transcribe" where args.count >= 2:
+                    try await liveTranscribe(path: args[1])
                 case "--render-demo" where args.count >= 2:
                     try renderDemo(to: URL(fileURLWithPath: args[1]))
                 case "--demo-snapshot" where args.count >= 2:
@@ -102,6 +105,36 @@ enum CLI {
         }
         for w in result.words {
             out(String(format: "%6.2f–%6.2f %@", w.start, w.end, w.text))
+        }
+    }
+
+    /// Feeds a file's samples in at real-time speed, as the microphone would.
+    private final class ReplaySource: LiveSampleSource, @unchecked Sendable {
+        private let all: [Float]
+        private let started = Date()
+        init(_ samples: [Float]) { all = samples }
+        var sampleCount: Int { min(all.count, Int(Date().timeIntervalSince(started) * AudioResult.sampleRate)) }
+        func samples(from start: Int, count: Int) -> [Float] {
+            let end = min(sampleCount, start + count)
+            return start < end ? Array(all[start..<end]) : []
+        }
+    }
+
+    @MainActor
+    private static func liveTranscribe(path: String) async throws {
+        let samples = try AudioRecorder.loadSamples(from: URL(fileURLWithPath: path))
+        let model = AppSettings.shared.model.rawValue
+        try await loadModel(model)
+        let source = ReplaySource(samples)
+        let live = LiveTranscriber(recorder: source, model: model, vocabulary: AppSettings.shared.vocabulary)
+        let duration = Double(samples.count) / AudioResult.sampleRate
+        out(String(format: "replaying %.1fs of audio…", duration))
+        try? await Task.sleep(nanoseconds: UInt64(duration * 1e9))
+        let started = Date()
+        guard let result = await live.finish(samples: samples) else { throw AppError("live transcription failed") }
+        out(String(format: "finish took %.2fs after the recording ended", Date().timeIntervalSince(started)))
+        for s in result.segments {
+            out(String(format: "[segment %6.2f–%6.2f] %@", s.start, s.end, s.text))
         }
     }
 

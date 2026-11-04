@@ -39,7 +39,11 @@ struct HUDView: View {
                 .opacity(model.micAvailable ? 1 : 0.3)
                 .help(model.micAvailable ? "Microphone level" : "No microphone access")
             Divider().frame(height: 22)
-            if model.navigating {
+            if model.mode == .dictation {
+                Text("Dictating · \(finishKey) to finish")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+            } else if model.navigating {
                 Text("Navigate, then \(snapshotKey) for shot \(model.shotCount + 1) · \(finishKey) to finish")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.primary)

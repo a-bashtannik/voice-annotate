@@ -100,6 +100,8 @@ public enum MarkdownComposer {
             out.append("The user took \(shots) and talked while drawing on it (voice-annotate).")
         case .walkthrough:
             out.append("The user recorded their screen while talking and using the computer (voice-annotate). The frames below are keyframes from that recording.")
+        case .dictation:
+            out.append("The user dictated this (voice-annotate).")
         }
         let displays = Set(doc.frames.compactMap(\.display))
         if displays.count > 1 {

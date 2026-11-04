@@ -47,7 +47,19 @@ Non-goals: cloud anything, editing past captures, non-English, Windows/Linux.
    via `SCContentFilter(excludingWindows:)` + `sharingType = .none`.
 6. Same hotkey (or `⌃⌥⌘F`) → stop. Auto-stop at max length (default 10 min).
 
-### 2.3 Multiple displays
+### 2.3 Dictation (default `⌃⌥⌘T`)
+Voice only: HUD with timer and mic level; the same hotkey (or `⌃⌥⌘F`) stops. The transcript
+goes to the clipboard as plain text; `audio.m4a` and `transcript.txt` stay in a capture
+folder (pruned like captures, not listed under Recent captures).
+
+### 2.4 Live transcription
+Audio is transcribed while recording, in all modes: once ≥ 15 s are pending, the recording is
+cut in the quietest 0.3 s window after the 15 s mark (if it is quiet relative to the piece's
+level), or at the quietest point once 30 s are pending (`ChunkPlanner`). One piece is
+transcribed at a time; word times are offset by the piece's start. On finish only the
+remainder is transcribed. If a piece fails, the whole recording is transcribed at the end.
+
+### 2.5 Multiple displays
 All connected displays take part (setting "Capture all displays", default on):
 - **Snapshot** freezes every display at once; draw on any of them (the overlay under the
   pointer takes focus on click). Frames = the display the cursor was on + every display that
@@ -60,7 +72,7 @@ All connected displays take part (setting "Capture all displays", default on):
   the cursor. Frames are numbered chronologically across displays and labelled with the
   display name in `capture.md`; `events.json` lists each display's canvas size.
 
-### 2.4 After finishing
+### 2.6 After finishing
 HUD toast: "Transcribing…" → "Copied ✓ 9 frames · 3 annotations · 142 words". Menu bar
 → *Recent captures* → copy again in another format / reveal in Finder.
 
@@ -142,17 +154,19 @@ Frames (1568×1018 px):
 
 ## 6. Clipboard
 
-Default **Universal** write — one pasteboard write, multiple items:
-1. item 0: `public.utf8-plain-text` = `capture.md` (absolute image paths) → terminals,
-   Claude Code (reads/attaches the paths); plus `public.file-url` of `capture.md`, because
-   Electron/web chats (Claude desktop, claude.ai, Cursor) attach the files and drop the text
-   when images are on the pasteboard — the transcript then arrives as an attached `.md`.
-2. items 1…N: `public.file-url` + `public.png` per image → browsers/Electron accept them as
-   attachments.
+Default **capture.md only** — one item: `public.utf8-plain-text` = `capture.md` (absolute
+image paths) plus `public.file-url` of `capture.md`. Terminals paste the text; Electron/web
+chats attach the `.md`. Agents with file access (Claude Code) read the frame paths from it,
+so the images don't have to travel as attachments.
 
-*Copy as…* (menu, per recent capture): **Text + paths**, **Images + text** (images first),
-**Images only**, **Composite** (single tall image: frames + transcript rendered beneath, for
-targets that take one image), **Markdown file** (the .md file itself as file URL).
+**capture.md + images** (for chats without file access) — the same item 0, then items 1…N:
+`public.file-url` + `public.png` per image → browsers/Electron accept them as attachments.
+Electron/web chats (Claude desktop, claude.ai, Cursor) drop the text when images are on the
+pasteboard, which is why item 0 also carries the `.md` file.
+
+*Copy as…* (menu, per recent capture): both of the above, **Text + paths**, **Images + text**
+(images first), **Images only**, **Composite** (single tall image: frames + transcript
+rendered beneath, for targets that take one image).
 
 ## 7. Architecture
 

@@ -7,6 +7,11 @@ struct TranscriptionOutput {
     /// Times relative to the start of the audio.
     var words: [Word]
     var segments: [SpeechSegment]
+
+    /// The transcript as plain prose.
+    var plainText: String {
+        segments.map(\.text).joined(separator: " ")
+    }
 }
 
 /// On-device transcription with WhisperKit. The model is downloaded once into
