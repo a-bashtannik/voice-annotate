@@ -67,9 +67,6 @@ Some of the design decisions:
   onsets and a periodic fallback. They are scored and spaced at least 1.2 s apart.
   Annotated frames are always kept, and near-duplicates are dropped.
   [SPEC.md §4](SPEC.md#4-walkthrough--keyframe-storyboard) has the details.
-- **Transcribed while you talk.** The recording is cut at pauses into 15–30 s pieces, and
-  each piece is transcribed in the background as soon as it's cut. When you finish, only the
-  last piece is left, so the wait no longer grows with the recording's length.
 - **Pasteboard pragmatics.** Different apps read a mixed pasteboard differently. Terminals
   take the text, and Electron chats take the files and silently drop the text. So the
   clipboard item carries both the transcript text and a file URL to `capture.md`.
@@ -114,8 +111,7 @@ On first launch, grant **Screen Recording** (then relaunch) and **Microphone**. 
 model (~630 MB) downloads to `~/.voice-annotate/models` on first start.
 
 The binary also has developer commands, e.g. `.build/debug/VoiceAnnotate --help`:
-`--transcribe <audio>`, `--live-transcribe <audio>` (replays a file in real time through the
-live transcriber), `--render-demo <out.png>`, `--demo-snapshot <audio> [screenshot annotations]`,
+`--transcribe <audio>`, `--render-demo <out.png>`, `--demo-snapshot <audio> [screenshot annotations]`,
 `--test-screenshot [screen]`, `--test-walkthrough <seconds> [screen|all]`.
 `docs/demo/render.sh` regenerates the README images with the real pipeline.
 

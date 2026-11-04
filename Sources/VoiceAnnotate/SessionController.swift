@@ -89,7 +89,6 @@ final class SessionController: NSObject, CanvasDelegate {
     private var hudScreen: NSScreen?
     private let hudModel = HUDModel()
     private var audio: AudioRecorder?
-    private var live: LiveTranscriber?
     private var recorders: [Int: WalkthroughRecorder] = [:]
     private var clickMonitor: Any?
     private var ticker: Timer?
@@ -328,8 +327,6 @@ final class SessionController: NSObject, CanvasDelegate {
         phase = .processing
         let audioResult = audio?.stop()
         audio = nil
-        let live = self.live
-        self.live = nil
         let screen = hudScreen
         teardownUI()
         Sounds.stop()
@@ -337,9 +334,9 @@ final class SessionController: NSObject, CanvasDelegate {
 
         Task {
             let samples = audioResult?.samples ?? []
-            var transcript = await live?.finish(samples: samples)
+            var transcript: TranscriptionOutput?
             var failure: Error?
-            if transcript == nil, !samples.isEmpty {
+            if !samples.isEmpty {
                 do {
                     transcript = try await Transcriber.shared.transcribe(samples, model: self.settings.model.rawValue, vocabulary: self.settings.vocabulary)
                 } catch {
@@ -449,8 +446,6 @@ final class SessionController: NSObject, CanvasDelegate {
         let duration = session.now()
         let audioResult = audio?.stop()
         audio = nil
-        let live = self.live
-        self.live = nil
         let recorders = self.recorders
         self.recorders = [:]
         let screen = hudScreen
@@ -473,8 +468,7 @@ final class SessionController: NSObject, CanvasDelegate {
                 }
                 for await stopped in group { recordings[stopped.index] = stopped.result }
             }
-            let transcript = await live?.finish(samples: audioResult?.samples ?? [])
-            var input = CaptureInput(
+            let input = CaptureInput(
                 mode: mode, folder: session.folder, startDate: session.startDate, t0: session.t0,
                 duration: duration, annotations: session.annotations, clicks: session.clicks,
                 shots: session.shots, displays: session.displays.map(\.info), audio: audioResult,
@@ -484,7 +478,6 @@ final class SessionController: NSObject, CanvasDelegate {
                 detailCrops: self.settings.detailCrops, keepOriginals: self.settings.keepOriginals,
                 fadeSeconds: self.settings.fadeSeconds
             )
-            input.transcript = transcript
             do {
                 let capture = try await CaptureProcessor.process(input)
                 try ClipboardWriter.write(capture, format: self.settings.clipboardFormat)
@@ -509,8 +502,6 @@ final class SessionController: NSObject, CanvasDelegate {
         let mode = session.mode
         _ = audio?.stop()
         audio = nil
-        live?.cancel()
-        live = nil
         let recorders = Array(self.recorders.values)
         self.recorders = [:]
         teardownUI()
@@ -668,7 +659,6 @@ final class SessionController: NSObject, CanvasDelegate {
             do {
                 try recorder.start()
                 audio = recorder
-                live = LiveTranscriber(recorder: recorder, model: settings.model.rawValue, vocabulary: settings.vocabulary)
                 hudModel.micAvailable = true
                 if session.mode == .dictation {
                     hudModel.starting = false

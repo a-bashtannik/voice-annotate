@@ -52,14 +52,7 @@ Voice only: HUD with timer and mic level; the same hotkey (or `⌃⌥⌘F`) stop
 goes to the clipboard as plain text; `audio.m4a` and `transcript.txt` stay in a capture
 folder (pruned like captures, not listed under Recent captures).
 
-### 2.4 Live transcription
-Audio is transcribed while recording, in all modes: once ≥ 15 s are pending, the recording is
-cut in the quietest 0.3 s window after the 15 s mark (if it is quiet relative to the piece's
-level), or at the quietest point once 30 s are pending (`ChunkPlanner`). One piece is
-transcribed at a time; word times are offset by the piece's start. On finish only the
-remainder is transcribed. If a piece fails, the whole recording is transcribed at the end.
-
-### 2.5 Multiple displays
+### 2.4 Multiple displays
 All connected displays take part (setting "Capture all displays", default on):
 - **Snapshot** freezes every display at once; draw on any of them (the overlay under the
   pointer takes focus on click). Frames = the display the cursor was on + every display that
@@ -72,7 +65,7 @@ All connected displays take part (setting "Capture all displays", default on):
   the cursor. Frames are numbered chronologically across displays and labelled with the
   display name in `capture.md`; `events.json` lists each display's canvas size.
 
-### 2.6 After finishing
+### 2.5 After finishing
 HUD toast: "Transcribing…" → "Copied ✓ 9 frames · 3 annotations · 142 words". Menu bar
 → *Recent captures* → copy again in another format / reveal in Finder.
 

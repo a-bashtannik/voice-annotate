@@ -45,8 +45,6 @@ struct CaptureInput {
     var detailCrops: Bool
     var keepOriginals: Bool
     var fadeSeconds: Double
-    /// Transcript made while recording (`LiveTranscriber`); nil = transcribe the audio here.
-    var transcript: TranscriptionOutput? = nil
 }
 
 struct RecentCapture: Codable, Identifiable, Equatable {
@@ -112,12 +110,7 @@ enum CaptureProcessor {
                 }
             }
             do {
-                let out: TranscriptionOutput
-                if let live = input.transcript {
-                    out = live
-                } else {
-                    out = try await Transcriber.shared.transcribe(samples, model: input.model, vocabulary: input.vocabulary)
-                }
+                let out = try await Transcriber.shared.transcribe(samples, model: input.model, vocabulary: input.vocabulary)
                 words = out.words.map { Word(text: $0.text, start: $0.start + audioStart, end: $0.end + audioStart) }
                 segments = out.segments.map { SpeechSegment(text: $0.text, start: $0.start + audioStart, end: $0.end + audioStart) }
             } catch {
