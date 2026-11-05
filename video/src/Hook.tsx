@@ -3,7 +3,7 @@ import { fadeIn } from "./Stage";
 import { theme } from "./theme";
 import { FPS } from "./timeline";
 
-export const HOOK_SECONDS = 4.2;
+export const HOOK_SECONDS = 6.8;
 
 const RAMBLE =
   "ok so on the runs page, the big number in the first card (no, the top left one, under “best val accuracy”) says 312% which can't be right, and the legend thing on the chart, kind of bottom right, is covering the lines, and the export button is";
@@ -11,10 +11,10 @@ const RAMBLE =
 export const Hook: React.FC = () => {
   const frame = useCurrentFrame();
   const t = frame / FPS;
-  const typed = RAMBLE.slice(0, Math.floor(Math.max(0, t - 0.35) * 105));
-  const out = interpolate(t, [2.55, 2.9], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const title = interpolate(t, [2.8, 3.15], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.cubic) });
-  const circle = interpolate(t, [3.2, 3.75], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.inOut(Easing.cubic) });
+  const typed = RAMBLE.slice(0, Math.floor(Math.max(0, t - 0.35) * 70));
+  const out = interpolate(t, [3.6, 4.0], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const title = interpolate(t, [3.9, 4.4], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.cubic) });
+  const circle = interpolate(t, [4.6, 5.4], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.inOut(Easing.cubic) });
 
   return (
     <AbsoluteFill style={{ background: theme.paper, fontFamily: theme.sans, alignItems: "center", justifyContent: "center", opacity: fadeIn(frame, 0, 8) }}>
