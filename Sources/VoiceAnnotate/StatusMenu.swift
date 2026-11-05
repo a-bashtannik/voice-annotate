@@ -93,6 +93,12 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         let status = NSMenuItem(title: Transcriber.shared.status.title, action: nil, keyEquivalent: "")
         status.isEnabled = false
         menu.addItem(status)
+        if case .failed = Transcriber.shared.status {
+            menu.addItem(ClosureMenuItem("Retry model download") { [weak self] in
+                guard let self else { return }
+                Transcriber.shared.preload(self.settings.model.rawValue)
+            })
+        }
         if !Permissions.screenRecordingGranted {
             menu.addItem(ClosureMenuItem("⚠️ Screen Recording permission needed…") { [weak self] in self?.onShowOnboarding() })
         }

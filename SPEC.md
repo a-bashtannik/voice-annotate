@@ -169,7 +169,7 @@ rendered beneath, for targets that take one image).
 
 ## 7. Architecture
 
-Swift 6 toolchain (Swift 5 language mode), SwiftPM, macOS 26+, `LSUIElement` agent app,
+Swift 6 toolchain (Swift 5 language mode), SwiftPM, macOS 15+, `LSUIElement` agent app,
 assembled into a signed `.app` by `scripts/build-app.sh`.
 
 - `VoiceAnnotateCore` (pure, unit-tested): models, shape classifier, keyframe selector,

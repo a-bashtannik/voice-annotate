@@ -82,6 +82,36 @@ Some of the design decisions:
 
 The full design is in [SPEC.md](SPEC.md).
 
+## Install
+
+Requires macOS 15 or later on Apple Silicon.
+
+1. Download `voice-annotate-<version>.zip` from
+   [Releases](https://github.com/andropar/voice-annotate/releases), unzip it and move
+   `voice-annotate.app` to Applications.
+2. The app isn't notarized (that needs a paid Apple Developer ID), so macOS blocks the first
+   launch. Open it once, click **Done**, then go to System Settings → Privacy & Security and
+   click **Open Anyway** next to the voice-annotate message. Alternatively, in Terminal:
+   `xattr -dr com.apple.quarantine /Applications/voice-annotate.app`.
+
+Or build it yourself (see [Build](#build)).
+
+### First run
+
+- **Permissions.** Grant **Screen Recording** when asked, then quit and reopen the app (macOS
+  only applies it after a relaunch), and allow the **Microphone**. Until Screen Recording is
+  granted, the menu bar menu shows a warning that opens the setup window.
+- **Model download.** The Whisper model (~630 MB) downloads once to
+  `~/.voice-annotate/models`; the menu bar menu shows progress (and a retry if it fails). A
+  capture finished before the download is done waits for it, with the progress on screen.
+- **Faster after a while.** For about 10 minutes after the first start, macOS compiles the
+  model for the Neural Engine in the background. Until then transcription runs on the GPU,
+  roughly 3× slower (a 1-minute recording takes ~15 s instead of ~5 s).
+- **After updating** to a new release (or rebuilding with ad-hoc signing), macOS may keep
+  showing Screen Recording as enabled while the app still can't record. Remove voice-annotate
+  from the list in System Settings → Privacy & Security → Screen Recording (the − button),
+  then add it again, or run `tccutil reset ScreenCapture com.jroth.voiceannotate`.
+
 ## Use
 
 | Shortcut | |
@@ -100,16 +130,17 @@ Bundles are pruned after 14 days.
 
 ## Build
 
-Requires macOS 15+, Xcode 16+ (Swift 6 toolchain) and Apple Silicon.
+Requires macOS 15+ on Apple Silicon and Xcode 16+ (Swift 6 toolchain).
 
 ```bash
 make install   # build release, sign with your Apple Development identity, copy to ~/Applications
 make run       # install + launch
 make test      # unit tests (VoiceAnnotateCore)
+make release   # ad-hoc signed zip for GitHub Releases, in build/
 ```
 
-On first launch, grant **Screen Recording** (then relaunch) and **Microphone**. The Whisper
-model (~630 MB) downloads to `~/.voice-annotate/models` on first start.
+Without an Apple Development identity the build is signed ad-hoc, so each rebuild looks
+like a new app to macOS: see *After updating* above for re-granting Screen Recording.
 
 The binary also has developer commands, e.g. `.build/debug/VoiceAnnotate --help`:
 `--transcribe <audio>`, `--render-demo <out.png>`, `--demo-snapshot <audio> [screenshot annotations]`,

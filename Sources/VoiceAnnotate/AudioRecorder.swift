@@ -22,6 +22,7 @@ final class AudioRecorder: @unchecked Sendable {
     private var samples: [Float] = []
     private var firstHostTime: Double?
     private var running = false
+    private var configObserver: NSObjectProtocol?
 
     /// Called on the main queue with the current RMS level (0…1, roughly perceptual).
     var onLevel: (@MainActor (Float) -> Void)?
@@ -52,12 +53,47 @@ final class AudioRecorder: @unchecked Sendable {
             throw error
         }
         running = true
+        // Switching input devices (AirPods connecting, a USB mic) stops the engine.
+        configObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+            self?.restartAfterConfigurationChange()
+        }
+    }
+
+    /// Resumes recording from the new input device into the same buffer; the gap is filled
+    /// with silence in `handle` so word times stay aligned.
+    private func restartAfterConfigurationChange() {
+        guard running else { return }
+        let input = engine.inputNode
+        input.removeTap(onBus: 0)
+        let inFormat = input.outputFormat(forBus: 0)
+        guard inFormat.sampleRate > 0, inFormat.channelCount > 0, let converter = AVAudioConverter(from: inFormat, to: targetFormat) else {
+            Log.audio.error("Audio input changed to an unusable format; recording stops here")
+            return
+        }
+        self.converter = converter
+        input.installTap(onBus: 0, bufferSize: 4096, format: inFormat) { [weak self] buffer, time in
+            self?.handle(buffer, time: time)
+        }
+        engine.prepare()
+        do {
+            try engine.start()
+            Log.audio.notice("Audio input changed; recording continues on the new device")
+        } catch {
+            Log.audio.error("Restarting audio after an input change failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer, time: AVAudioTime) {
+        let hostTime = time.isHostTimeValid ? AVAudioTime.seconds(forHostTime: time.hostTime) : HostClock.now()
         lock.withLock {
-            if firstHostTime == nil {
-                firstHostTime = time.isHostTimeValid ? AVAudioTime.seconds(forHostTime: time.hostTime) : HostClock.now()
+            if let first = firstHostTime {
+                // Audio missing since the last buffer (e.g. a device switch) becomes silence.
+                let gap = Int((hostTime - first) * AudioResult.sampleRate) - samples.count
+                if gap > Int(AudioResult.sampleRate / 10) {
+                    samples.append(contentsOf: repeatElement(0, count: gap))
+                }
+            } else {
+                firstHostTime = hostTime
             }
         }
         guard let converter, buffer.frameLength > 0 else { return }
@@ -91,6 +127,8 @@ final class AudioRecorder: @unchecked Sendable {
     }
 
     func stop() -> AudioResult {
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+        configObserver = nil
         if running {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()

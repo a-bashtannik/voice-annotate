@@ -91,9 +91,10 @@ enum Sounds {
 }
 
 enum Screens {
-    static func underMouse() -> NSScreen {
+    /// nil only while no display is attached (e.g. mid-reconfiguration).
+    static func underMouse() -> NSScreen? {
         let p = NSEvent.mouseLocation
-        return NSScreen.screens.first { NSMouseInRect(p, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
+        return NSScreen.screens.first { NSMouseInRect(p, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens.first
     }
 
     static func displayID(of screen: NSScreen) -> CGDirectDisplayID {

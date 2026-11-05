@@ -9,8 +9,13 @@ enum Permissions {
 
     static var microphoneGranted: Bool { microphoneStatus == .authorized }
 
+    /// The first request shows the system prompt; later ones (macOS prompts only once) open
+    /// System Settings instead.
     static func requestScreenRecording() {
-        if !CGRequestScreenCaptureAccess() {
+        let key = "requestedScreenRecording"
+        let askedBefore = UserDefaults.standard.bool(forKey: key)
+        UserDefaults.standard.set(true, forKey: key)
+        if !CGRequestScreenCaptureAccess(), askedBefore {
             openSettings("Privacy_ScreenCapture")
         }
     }

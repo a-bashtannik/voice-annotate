@@ -121,14 +121,20 @@ enum CaptureProcessor {
         }
 
         // 2. Frames.
-        var frames: [BuiltFrame]
-        switch input.mode {
-        case .snapshot:
-            frames = try await Task.detached(priority: .userInitiated) { try buildSnapshotFrames(input) }.value
-        case .walkthrough:
-            frames = try await buildWalkthroughFrames(input, speechStarts: segments.map(\.start))
-        case .dictation:
-            frames = []
+        var frames: [BuiltFrame] = []
+        do {
+            switch input.mode {
+            case .snapshot:
+                frames = try await Task.detached(priority: .userInitiated) { try buildSnapshotFrames(input) }.value
+            case .walkthrough:
+                frames = try await buildWalkthroughFrames(input, speechStarts: segments.map(\.start))
+            case .dictation:
+                break
+            }
+        } catch {
+            // Keep the transcript: capture.md is still written, without frames.
+            Log.capture.error("Building frames failed: \(error.localizedDescription, privacy: .public)")
+            note = [note, "Frames failed: \(error.localizedDescription)"].compactMap { $0 }.joined(separator: " · ")
         }
         let multiDisplay = Set(frames.map(\.display)).count > 1
         if multiDisplay {

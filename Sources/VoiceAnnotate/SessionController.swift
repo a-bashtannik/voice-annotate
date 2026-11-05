@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import VoiceAnnotateCore
 
 /// A display taking part in the current capture.
@@ -97,6 +98,9 @@ final class SessionController: NSObject, CanvasDelegate {
     private var ticker: Timer?
     private var previousApp: NSRunningApplication?
     private var lastCursorDisplay: Int?
+    /// Busy toast shown while processing; kept current with the model's download/load status.
+    private var processingToast: (title: String, screen: NSScreen?)?
+    private var modelStatusWatch: AnyCancellable?
 
     init(recents: RecentsStore) {
         self.recents = recents
@@ -123,7 +127,7 @@ final class SessionController: NSObject, CanvasDelegate {
         case (.dictation, .dictation): finish()
         case (.finish, _) where phase.isCapturing: finish()
         case (.toggleDraw, .walkthrough): hudModel.drawToggled.toggle()
-        case (_, .processing): Toast.shared.show("Still processing the last capture…", busy: true, duration: 1.5)
+        case (_, .processing): showProcessingToast()
         default: break
         }
     }
@@ -134,6 +138,11 @@ final class SessionController: NSObject, CanvasDelegate {
         guard phase == .idle else { return }
         guard Permissions.screenRecordingGranted else {
             onNeedsPermissions?()
+            return
+        }
+        // The system prompt would sit under the frozen-screen overlays, so ask first.
+        if Permissions.microphoneStatus == .notDetermined {
+            Permissions.requestMicrophone { [weak self] _ in self?.startSnapshot() }
             return
         }
         guard let session = makeSession(.snapshot) else { return }
@@ -333,7 +342,7 @@ final class SessionController: NSObject, CanvasDelegate {
         let screen = hudScreen
         teardownUI()
         Sounds.stop()
-        Toast.shared.show("Transcribing…", busy: true, duration: nil, on: screen)
+        beginProcessingToast("Transcribing…", on: screen)
 
         Task {
             let samples = audioResult?.samples ?? []
@@ -348,6 +357,7 @@ final class SessionController: NSObject, CanvasDelegate {
             }
             let text = transcript?.plainText ?? ""
             Self.saveDictation(samples, text: text, in: session.folder)
+            self.endProcessingToast()
             if let failure {
                 Log.transcribe.error("Dictation failed: \(failure.localizedDescription, privacy: .public)")
                 Toast.shared.show("Transcription failed", detail: failure.localizedDescription, success: false, duration: 5, on: screen)
@@ -443,7 +453,8 @@ final class SessionController: NSObject, CanvasDelegate {
             finishDictation(session)
             return
         }
-        if phase == .walkthrough && hudModel.starting { return }
+        // Nothing captured yet (recording starting, first screenshot pending).
+        if (phase == .walkthrough || phase == .snapshot) && hudModel.starting { return }
         phase = .processing
         let mode = session.mode
         let duration = session.now()
@@ -456,12 +467,7 @@ final class SessionController: NSObject, CanvasDelegate {
         if mode == .snapshot { previousApp?.activate() }
         Sounds.stop()
 
-        let transcriberReady = Transcriber.shared.status.isReady
-        Toast.shared.show(
-            "Processing capture…",
-            detail: transcriberReady ? "Transcribing and composing" : Transcriber.shared.status.title,
-            busy: true, duration: nil, on: screen
-        )
+        beginProcessingToast("Processing capture…", on: screen)
 
         Task {
             var recordings: [Int: RecordingResult] = [:]
@@ -483,15 +489,20 @@ final class SessionController: NSObject, CanvasDelegate {
             )
             do {
                 let capture = try await CaptureProcessor.process(input)
-                try ClipboardWriter.write(capture, format: self.settings.clipboardFormat)
+                // Listed first, so a failed clipboard write can be redone from the menu.
                 self.recents.add(capture)
+                try ClipboardWriter.write(capture, format: self.settings.clipboardFormat)
+                self.endProcessingToast()
+                var detail = capture.note ?? capture.summary
+                if audioResult == nil { detail += " · no microphone access" }
                 Toast.shared.show(
-                    "Copied to clipboard", detail: capture.note ?? capture.summary,
+                    "Copied to clipboard", detail: detail,
                     success: capture.note == nil, duration: capture.note == nil ? 2.8 : 5, on: screen
                 )
                 Sounds.done()
             } catch {
                 Log.app.error("Processing failed: \(error.localizedDescription, privacy: .public)")
+                self.endProcessingToast()
                 Toast.shared.show("Capture failed", detail: error.localizedDescription, success: false, duration: 5, on: screen)
                 Sounds.error()
             }
@@ -591,6 +602,7 @@ final class SessionController: NSObject, CanvasDelegate {
     // MARK: Helpers
 
     private func makeSession(_ mode: CaptureMode) -> CaptureSession? {
+        guard !NSScreen.screens.isEmpty else { return nil }
         do {
             let s = CaptureSession(mode: mode, folder: try Paths.newCaptureFolder())
             session = s
@@ -599,6 +611,29 @@ final class SessionController: NSObject, CanvasDelegate {
             Toast.shared.show("Cannot create capture folder", detail: error.localizedDescription, success: false, duration: 4)
             return nil
         }
+    }
+
+    /// Shows a busy toast that follows the model status, so a first capture waiting for
+    /// the model download shows progress instead of looking stuck.
+    private func beginProcessingToast(_ title: String, on screen: NSScreen?) {
+        processingToast = (title, screen)
+        showProcessingToast()
+        modelStatusWatch = Transcriber.shared.$status
+            .removeDuplicates()
+            .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.showProcessingToast() } }
+    }
+
+    private func showProcessingToast() {
+        guard phase == .processing, let toast = processingToast else { return }
+        let status = Transcriber.shared.status
+        let detail = status.isReady ? "Transcribing and composing" : "Waiting for the model: \(status.title)"
+        Toast.shared.show(toast.title, detail: detail, busy: true, duration: nil, on: toast.screen)
+    }
+
+    private func endProcessingToast() {
+        modelStatusWatch = nil
+        processingToast = nil
     }
 
     private func configure(_ canvas: AnnotationCanvasView, shot: Int, screen: Int, fade: Double?) {

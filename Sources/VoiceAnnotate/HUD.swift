@@ -279,7 +279,7 @@ final class Toast {
         }()
         panel.ignoresMouseEvents = true
         DispatchQueue.main.async {
-            let target = screen ?? Screens.underMouse()
+            guard let target = screen ?? Screens.underMouse() else { return }
             panel.refit(on: target)
             panel.orderFrontRegardless()
         }
