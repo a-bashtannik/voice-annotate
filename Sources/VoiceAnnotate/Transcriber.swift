@@ -174,6 +174,13 @@ final class Transcriber: ObservableObject {
             wordTimestamps: true,
             chunkingStrategy: .vad
         )
+        // Each retry detects the language again at a higher temperature, where it can flip:
+        // clear Russian came back as Ukrainian at 0.2 and 0.4. So detection gets one attempt,
+        // and the first-token check, which only abandons a window for a retry, goes with it.
+        if plan.language == nil {
+            options.temperatureFallbackCount = 0
+            options.firstTokenLogProbThreshold = nil
+        }
         let vocab = vocabulary.trimmingCharacters(in: .whitespacesAndNewlines)
         if !vocab.isEmpty, let tokenizer = kit.tokenizer {
             options.promptTokens = tokenizer.encode(text: " " + vocab).filter { $0 < tokenizer.specialTokens.specialTokenBegin }
