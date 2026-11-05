@@ -128,6 +128,7 @@ final class Transcriber: ObservableObject {
             modelFolder: folder.path,
             tokenizerFolder: Paths.models,
             computeOptions: ModelComputeOptions(melCompute: .cpuAndGPU, audioEncoderCompute: encoder, textDecoderCompute: .cpuAndNeuralEngine),
+            segmentSeeker: PatchedSegmentSeeker(),
             verbose: false,
             logLevel: .error,
             load: true,
