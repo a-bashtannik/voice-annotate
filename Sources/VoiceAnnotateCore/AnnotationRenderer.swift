@@ -61,11 +61,11 @@ public enum AnnotationRenderer {
             ctx.setLineWidth(lw)
             ctx.strokePath()
         case .pin:
-            drawBadge(number: a.id, center: pts[0], radius: CGFloat(Annotation.pinRadius) * m, color: a.color, in: ctx, scale: m)
+            drawBadge(number: a.number ?? 0, center: pts[0], radius: CGFloat(Annotation.pinRadius) * m, color: a.color, in: ctx, scale: m)
             return
         }
 
-        guard showBadge, a.id > 0 else { return }
+        guard showBadge, let number = a.number else { return }
         var center = badgeCenter(for: a, markFactor: m / s)
         if let canvasSize {
             let r = (Double(badgeRadius) + 2) * Double(m / s)
@@ -73,7 +73,7 @@ public enum AnnotationRenderer {
             center.y = min(max(center.y, r), canvasSize.height - r)
         }
         ctx.setShadow(offset: .zero, blur: 0, color: nil)
-        drawBadge(number: a.id, center: CGPoint(x: center.x * s, y: center.y * s), radius: badgeRadius * m, color: a.color, in: ctx, scale: m)
+        drawBadge(number: number, center: CGPoint(x: center.x * s, y: center.y * s), radius: badgeRadius * m, color: a.color, in: ctx, scale: m)
     }
 
     /// Badge position in canvas points: at the arrow's tail, else outside the top-left corner.

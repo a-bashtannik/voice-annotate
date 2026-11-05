@@ -7,18 +7,8 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 export const progress = (m: Mark, t: number) =>
   clamp01((t - m.start) / (m.end - m.start));
 
-/** Point `p` of the way along a polyline. */
-const along = (pts: Pt[], p: number): Pt => {
-  if (pts.length === 1 || p <= 0) return pts[0];
-  if (p >= 1) return pts[pts.length - 1];
-  const f = p * (pts.length - 1);
-  const i = Math.floor(f), r = f - i;
-  return { x: pts[i].x + (pts[i + 1].x - pts[i].x) * r, y: pts[i].y + (pts[i + 1].y - pts[i].y) * r };
-};
-
-/** Where the user's pointer is while drawing mark `m` with progress `p`. */
+/** Where the user's pointer is while drawing mark `m` with progress `p` (a drag). */
 const tip = (m: Mark, p: number): Pt => {
-  if (m.tool === "pen") return along(m.points, p);
   const [a, b] = m.points;
   return { x: a.x + (b.x - a.x) * p, y: a.y + (b.y - a.y) * p };
 };
@@ -79,10 +69,12 @@ const MarkShape: React.FC<{ m: Mark; t: number; pulse: number }> = ({ m, t, puls
   if (p <= 0) return null;
   const [a, b] = m.points;
   let d: string;
-  if (m.tool === "pen") {
-    const n = Math.max(2, Math.ceil(p * m.points.length));
-    const pts = [...m.points.slice(0, n - 1), along(m.points, p)];
-    d = "M" + pts.map((q) => `${q.x},${q.y}`).join(" L");
+  if (m.tool === "ellipse") {
+    // Grows with the drag, like the app's ellipse tool.
+    const c = tip(m, p);
+    const rx = Math.max(0.5, Math.abs(c.x - a.x) / 2), ry = Math.max(0.5, Math.abs(c.y - a.y) / 2);
+    const cx = (a.x + c.x) / 2, cy = (a.y + c.y) / 2;
+    d = `M${cx - rx},${cy} a${rx},${ry} 0 1 0 ${2 * rx},0 a${rx},${ry} 0 1 0 ${-2 * rx},0`;
   } else if (m.tool === "rectangle") {
     const c = tip(m, p);
     d = `M${a.x},${a.y} H${c.x} V${c.y} H${a.x} Z`;

@@ -150,8 +150,9 @@ final class AnnotationCanvasView: NSView {
         if a.tool.isTwoPoint {
             guard a.points.count == 2, extent >= 6 else { return }
         } else if extent < 3 {
-            // A tap with the pen or highlighter drops a pin.
-            a = Annotation(tool: .pin, points: [a.points[0]], color: a.color, startTime: a.startTime, shot: shot, screen: screen)
+            // A pen tap stays a dot; a highlighter tap highlights nothing.
+            guard a.tool == .pen else { return }
+            a.points = [a.points[0]]
         }
         a.finalize(endTime: t)
         delegate?.canvas(self, didFinish: a)

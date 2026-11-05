@@ -12,9 +12,9 @@ every drawing) on the clipboard. Fully local, free, no API keys.
     overlay, navigate, grab the next shot, keep talking — all in one capture.
   - **Walkthrough** — record the screen while you keep using the computer; draw on top
     whenever you want (hold-to-draw or toggle).
-- Every annotation (circle, arrow, box, highlight, underline, pin, freehand) is numbered,
-  burned into the image, *and* referenced in the transcript at the moment it was drawn,
-  with its location in image pixel coordinates.
+- Every pointing mark (circle, arrow, box, highlight, pin) is numbered, burned into the
+  image, *and* referenced in the transcript at the moment it was drawn, with its location
+  in image pixel coordinates. Pen drawings are burned in and referenced, but not numbered.
 - Output pastes usefully into any agent: Claude Code (terminal), claude.ai / ChatGPT web,
   Cursor / IDE chats.
 - Transcription: WhisperKit (MIT, on-device, Apple Silicon optimized), word-level
@@ -29,7 +29,7 @@ Non-goals: cloud anything, editing past captures, non-English, Windows/Linux.
 1. Hotkey → screenshot of the display under the cursor (native resolution); mic starts.
 2. Full-screen overlay shows the frozen frame; floating toolbar at the top (timer, mic
    level, tools, colors, undo, next-shot, finish, cancel).
-3. Draw while talking. Keys: `P` smart pen · `A` arrow · `R` rectangle · `O` ellipse ·
+3. Draw while talking. Keys: `P` pen · `A` arrow · `R` rectangle · `O` ellipse ·
    `H` highlighter · `N` pin · `1–6` colors · `⌘Z` undo · `⌫` delete last.
 4. `Tab` → **next shot**: overlay hides, audio keeps recording, HUD says "navigate, then
    press ⌃⌥⌘S for the next shot". Hotkey → new screenshot, overlay returns.
@@ -73,17 +73,23 @@ HUD toast: "Transcribing…" → "Copied ✓ 9 frames · 3 annotations · 142 wo
 
 | Tool | Description in transcript |
 |---|---|
-| Smart pen (freehand) | auto-classified on release: closed loop → **circled** region; near-straight → **underline/line**; else **drawing over** region |
+| Pen (freehand) | **drawing over** region; never reinterpreted as a shape, no number (see below) |
 | Arrow | **arrow** from (x,y) **pointing at** (x,y) |
 | Rectangle | **box around** (x1,y1)–(x2,y2) |
 | Ellipse | **circled** region (x1,y1)–(x2,y2) |
 | Highlighter | **highlighted** region |
 | Pin | **pin** at (x,y) |
 
-Each annotation gets a sequential number `#n` per capture, drawn as a badge next to it
+Each pointing mark gets a sequential number `#n` per capture, drawn as a badge next to it
 (pins *are* the badge). In the transcript it appears as
 `[#3 circled (412,230)–(640,310) in frame 2]`, inserted at the word being spoken when
 drawing started. All coordinates are in the output image's pixel space, top-left origin.
+
+Pen strokes are drawing (sketches, handwriting, multi-stroke marks): no badge, no number,
+no shape guessing. Consecutive strokes on the same frame that start ≤ 1.5 s after the
+previous one ends form one burst, referenced once at its start as
+`[drawing (4 strokes) over (x1,y1)–(x2,y2) in frame 1]`; after a longer pause the next
+stroke starts a new reference. A pen tap leaves a dot.
 
 ## 4. Walkthrough → keyframe storyboard
 

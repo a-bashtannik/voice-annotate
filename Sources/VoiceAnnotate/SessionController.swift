@@ -35,7 +35,10 @@ final class CaptureSession {
 
     func now() -> Double { HostClock.now() - t0 }
 
-    var nextNumber: Int { (annotations.map(\.id).max() ?? 0) + 1 }
+    var nextID: Int { (annotations.map(\.id).max() ?? 0) + 1 }
+    var nextMarkNumber: Int { (annotations.compactMap(\.number).max() ?? 0) + 1 }
+    /// Marks with a number badge (pen drawings don't count).
+    var markCount: Int { annotations.filter { $0.number != nil }.count }
 
     func display(atGlobal p: NSPoint) -> CaptureDisplay? {
         displays.first { NSMouseInRect(p, $0.screen.frame, false) }
@@ -548,10 +551,11 @@ final class SessionController: NSObject, CanvasDelegate {
     func canvas(_ canvas: AnnotationCanvasView, didFinish annotation: Annotation) {
         guard let session else { return }
         var a = annotation
-        a.id = session.nextNumber
+        a.id = session.nextID
+        if !a.isDrawing { a.number = session.nextMarkNumber }
         session.annotations.append(a)
         canvas.add(a)
-        hudModel.annotationCount = session.annotations.count
+        hudModel.annotationCount = session.markCount
     }
 
     func canvasRequestsFinish() { finish() }
@@ -571,7 +575,7 @@ final class SessionController: NSObject, CanvasDelegate {
         guard let last = session.annotations.filter({ visible[$0.id] != nil }).max(by: { $0.id < $1.id }) else { return }
         session.annotations.removeAll { $0.id == last.id }
         visible[last.id]?.remove(id: last.id)
-        hudModel.annotationCount = session.annotations.count
+        hudModel.annotationCount = session.markCount
     }
 
     private func select(tool: AnnotationTool) {

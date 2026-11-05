@@ -139,13 +139,25 @@ enum CaptureProcessor {
 
         // 3. Annotation / click markers.
         var markers: [Marker] = []
-        var annotationLines: [String] = []
-        for a in input.annotations.sorted(by: { $0.id < $1.id }) {
+        var annotationLines: [(time: Double, text: String)] = []
+        for a in input.annotations where !a.isDrawing {
             guard let frameIndex = frameIndex(for: a, mode: input.mode, frames: frames) else { continue }
             let f = frames[frameIndex]
             let text = AnnotationDescriber.describe(a, mapper: f.mapper, frame: f.ref.number)
             markers.append(Marker(time: a.startTime, text: text))
-            annotationLines.append("\(text) · \(Timecode.clock(a.startTime))")
+            annotationLines.append((a.startTime, "\(text) · \(Timecode.clock(a.startTime))"))
+        }
+        // Pen strokes are referenced per burst (one reference for a sketch drawn in one go).
+        let bursts = AnnotationDescriber.drawingBursts(input.annotations.filter(\.isDrawing)) {
+            frameIndex(for: $0, mode: input.mode, frames: frames)
+        }
+        for burst in bursts {
+            let f = frames[burst.frame]
+            let text = AnnotationDescriber.describeDrawing(burst.strokes, mapper: f.mapper, frame: f.ref.number)
+            let start = burst.strokes[0].startTime, end = burst.strokes[burst.strokes.count - 1].endTime
+            markers.append(Marker(time: start, text: text))
+            let span = Timecode.clock(start) == Timecode.clock(end) ? Timecode.clock(start) : "\(Timecode.clock(start))–\(Timecode.clock(end))"
+            annotationLines.append((start, "\(text) · \(span)"))
         }
         var hasClickMarkers = false
         if input.mode == .walkthrough {
@@ -162,7 +174,8 @@ enum CaptureProcessor {
         // 4. Markdown + events.
         let doc = CaptureDocument(
             mode: input.mode, startDate: input.startDate, duration: input.duration, folder: folder.path,
-            frames: frames.map(\.ref), words: words, markers: markers, annotationLines: annotationLines,
+            frames: frames.map(\.ref), words: words, markers: markers,
+            annotationLines: annotationLines.sorted { $0.time < $1.time }.map(\.text),
             hasClicks: hasClickMarkers
         )
         var markdown = MarkdownComposer.compose(doc)
@@ -217,7 +230,7 @@ enum CaptureProcessor {
         return RecentCapture(
             folder: folder.path, date: input.startDate, mode: input.mode, duration: input.duration,
             markdownPath: markdownURL.path, imagePaths: frames.flatMap(\.imagePaths), framePaths: frames.map(\.ref.path),
-            wordCount: words.count, annotationCount: input.annotations.count, note: note
+            wordCount: words.count, annotationCount: annotationLines.count, note: note
         )
     }
 
@@ -233,7 +246,7 @@ enum CaptureProcessor {
     /// Canvas region an annotation occupies including its badge.
     private static func extent(of a: Annotation) -> CGRect {
         var r = a.bounds.insetBy(dx: -a.lineWidth / 2, dy: -a.lineWidth / 2)
-        if a.tool != .pin {
+        if a.tool != .pin, a.number != nil {
             let c = AnnotationRenderer.badgeCenter(for: a)
             let br = Double(AnnotationRenderer.badgeRadius)
             r = r.union(CGRect(x: c.x - br, y: c.y - br, width: 2 * br, height: 2 * br))

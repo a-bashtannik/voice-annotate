@@ -34,7 +34,7 @@ export const phrases: Word[][] = words.reduce<Word[][]>((acc, w) => {
 export type Pt = { x: number; y: number };
 export type Mark = {
   id: number;
-  tool: "pen" | "rectangle" | "arrow";
+  tool: "ellipse" | "rectangle" | "arrow";
   color: string;
   start: number;
   end: number;

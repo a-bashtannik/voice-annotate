@@ -10,35 +10,18 @@ final class ShapeClassifierTests: XCTestCase {
         }
     }
 
-    func testClosedLoopIsCircled() {
-        XCTAssertEqual(ShapeClassifier.classifyStroke(circle()), .circled)
-        XCTAssertEqual(ShapeClassifier.classifyStroke(circle(turns: 0.88)), .circled)
-    }
-
-    func testHalfCircleIsNotCircled() {
-        XCTAssertEqual(ShapeClassifier.classifyStroke(circle(turns: 0.5)), .freehand)
-    }
-
-    func testStraightStrokeIsLine() {
-        let pts = (0...30).map { CGPoint(x: 10 + Double($0) * 10, y: 100 + Double($0 % 2)) }
-        XCTAssertEqual(ShapeClassifier.classifyStroke(pts), .line)
-    }
-
-    func testZigzagScribbleIsFreehand() {
-        let pts = (0...40).map { CGPoint(x: 10 + Double($0) * 8, y: $0 % 2 == 0 ? 100 : 160) }
-        XCTAssertEqual(ShapeClassifier.classifyStroke(pts), .freehand)
-    }
-
-    func testBackAndForthIsNotCircled() {
-        let forward = (0...20).map { CGPoint(x: Double($0) * 10, y: 100 + Double($0) * 0.5) }
-        let back = (0...20).reversed().map { CGPoint(x: Double($0) * 10, y: 104 + Double($0) * 0.5) }
-        XCTAssertNotEqual(ShapeClassifier.classifyStroke(forward + back), .circled)
+    func testPenStrokesStayFreehandDrawings() {
+        var loop = Annotation(tool: .pen, points: circle(), color: .red, startTime: 0)
+        loop.finalize(endTime: 1)
+        XCTAssertEqual(loop.shape, .freehand)
+        XCTAssertTrue(loop.isDrawing)
+        XCTAssertNil(loop.number)
     }
 
     func testToolShapes() {
-        XCTAssertEqual(ShapeClassifier.shape(for: .arrow, points: []), .arrow)
-        XCTAssertEqual(ShapeClassifier.shape(for: .rectangle, points: []), .box)
-        XCTAssertEqual(ShapeClassifier.shape(for: .pin, points: []), .pin)
+        XCTAssertEqual(ShapeClassifier.defaultShape(for: .arrow), .arrow)
+        XCTAssertEqual(ShapeClassifier.defaultShape(for: .rectangle), .box)
+        XCTAssertEqual(ShapeClassifier.defaultShape(for: .pin), .pin)
     }
 }
 
@@ -95,23 +78,43 @@ final class DescriberTests: XCTestCase {
     let mapper = CoordinateMapper(canvasSize: CGSize(width: 1000, height: 1000), imageSize: CGSize(width: 1000, height: 1000))
 
     func testArrowDescription() {
-        let a = Annotation(id: 2, tool: .arrow, points: [CGPoint(x: 10, y: 20), CGPoint(x: 300, y: 400)], color: .red, startTime: 0)
+        let a = Annotation(id: 2, number: 2, tool: .arrow, points: [CGPoint(x: 10, y: 20), CGPoint(x: 300, y: 400)], color: .red, startTime: 0)
         XCTAssertEqual(AnnotationDescriber.describe(a, mapper: mapper, frame: 3), "#2 arrow from (10,20) pointing at (300,400) in frame 3")
     }
 
     func testCircledDescription() {
-        var a = Annotation(id: 1, tool: .pen, points: ShapeClassifierTests().circle(), color: .red, startTime: 0)
-        a.finalize(endTime: 1)
-        XCTAssertEqual(a.shape, .circled)
-        XCTAssertTrue(AnnotationDescriber.describe(a, mapper: mapper, frame: nil).hasPrefix("#1 circled (120,100)-(280,200)"))
+        let a = Annotation(id: 7, number: 1, tool: .ellipse, points: [CGPoint(x: 120, y: 100), CGPoint(x: 280, y: 200)], color: .red, startTime: 0)
+        XCTAssertEqual(AnnotationDescriber.describe(a, mapper: mapper, frame: nil), "#1 circled (120,100)-(280,200)")
     }
 
-    func testPinAndUnderline() {
-        let pin = Annotation(id: 4, tool: .pin, points: [CGPoint(x: 50, y: 60)], color: .red, startTime: 0)
+    func testPinDescription() {
+        let pin = Annotation(id: 9, number: 4, tool: .pin, points: [CGPoint(x: 50, y: 60)], color: .red, startTime: 0)
         XCTAssertEqual(AnnotationDescriber.describe(pin, mapper: mapper, frame: 1), "#4 pin at (50,60) in frame 1")
-        var line = Annotation(id: 5, tool: .pen, points: (0...20).map { CGPoint(x: 100 + Double($0) * 10, y: 500) }, color: .red, startTime: 0)
-        line.finalize(endTime: 1)
-        XCTAssertEqual(AnnotationDescriber.describe(line, mapper: mapper, frame: nil), "#5 underline (100,500)-(300,500)")
+    }
+
+    func stroke(_ x: Double, start: Double, end: Double, shot: Int = 0) -> Annotation {
+        var a = Annotation(tool: .pen, points: [CGPoint(x: x, y: 100), CGPoint(x: x + 50, y: 140)], color: .red, startTime: start, shot: shot)
+        a.finalize(endTime: end)
+        return a
+    }
+
+    func testDrawingBurstsSplitOnPausesAndFrames() {
+        let strokes = [
+            stroke(100, start: 0, end: 0.5), stroke(200, start: 1.2, end: 1.8), stroke(300, start: 2.5, end: 3),
+            // A pause to think, then more drawing.
+            stroke(400, start: 8, end: 8.6),
+            // Same moment, another shot.
+            stroke(500, start: 9, end: 9.5, shot: 1),
+        ]
+        let bursts = AnnotationDescriber.drawingBursts(strokes) { $0.shot }
+        XCTAssertEqual(bursts.map(\.strokes.count), [3, 1, 1])
+        XCTAssertEqual(bursts.map(\.frame), [0, 0, 1])
+    }
+
+    func testDrawingDescriptionHasNoNumber() {
+        let text = AnnotationDescriber.describeDrawing([stroke(100, start: 0, end: 1), stroke(300, start: 1.5, end: 2)], mapper: mapper, frame: 2)
+        XCTAssertEqual(text, "drawing (2 strokes) over (100,100)-(350,140) in frame 2")
+        XCTAssertEqual(AnnotationDescriber.describeDrawing([stroke(100, start: 0, end: 1)], mapper: mapper, frame: nil), "drawing over (100,100)-(150,140)")
     }
 }
 

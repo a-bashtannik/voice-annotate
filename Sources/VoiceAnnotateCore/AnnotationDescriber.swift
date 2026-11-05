@@ -2,7 +2,8 @@ import CoreGraphics
 import Foundation
 
 /// Produces the textual reference for an annotation, e.g.
-/// `#3 circled (412,230)-(640,310) in frame 2`.
+/// `#3 circled (412,230)-(640,310) in frame 2`, or for a burst of pen strokes
+/// `drawing (4 strokes) over (100,80)-(420,300) in frame 1`.
 public enum AnnotationDescriber {
     public static func describe(_ a: Annotation, mapper: CoordinateMapper, frame: Int?) -> String {
         let body: String
@@ -13,16 +14,7 @@ public enum AnnotationDescriber {
             let from = a.points.first ?? .zero
             let to = a.points.last ?? from
             body = "arrow from \(pt(mapper.map(from))) pointing at \(pt(mapper.map(to)))"
-        case .line:
-            let from = a.points.first ?? .zero
-            let to = a.points.last ?? from
-            let dx = abs(to.x - from.x), dy = abs(to.y - from.y)
-            if dy < 0.3 * dx {
-                body = "underline \(rect(mapper.map(a.bounds)))"
-            } else {
-                body = "line from \(pt(mapper.map(from))) to \(pt(mapper.map(to)))"
-            }
-        case .circled, .ellipse:
+        case .ellipse:
             body = "circled \(rect(mapper.map(a.bounds)))"
         case .box:
             body = "box around \(rect(mapper.map(a.bounds)))"
@@ -31,10 +23,35 @@ public enum AnnotationDescriber {
         case .freehand:
             body = "drawing over \(rect(mapper.map(a.bounds)))"
         }
-        if let frame {
-            return "#\(a.id) \(body) in frame \(frame)"
+        return label(body, number: a.number, frame: frame)
+    }
+
+    /// One reference for a burst of pen strokes (see `drawingBursts`); no number.
+    public static func describeDrawing(_ strokes: [Annotation], mapper: CoordinateMapper, frame: Int?) -> String {
+        let bounds = strokes.map(\.bounds).reduce(CGRect.null) { $0.union($1) }
+        let count = strokes.count > 1 ? " (\(strokes.count) strokes)" : ""
+        return label("drawing\(count) over \(rect(mapper.map(bounds)))", number: nil, frame: frame)
+    }
+
+    /// Groups pen strokes into bursts: consecutive strokes on the same frame that start
+    /// within `maxGap` seconds of the previous one ending. Strokes without a frame are dropped.
+    public static func drawingBursts(_ strokes: [Annotation], frameOf: (Annotation) -> Int?, maxGap: Double = 1.5) -> [(frame: Int, strokes: [Annotation])] {
+        var bursts: [(frame: Int, strokes: [Annotation])] = []
+        for a in strokes.sorted(by: { $0.startTime < $1.startTime }) {
+            guard let frame = frameOf(a) else { continue }
+            if let last = bursts.last, last.frame == frame, let prev = last.strokes.last, a.startTime - prev.endTime <= maxGap {
+                bursts[bursts.count - 1].strokes.append(a)
+            } else {
+                bursts.append((frame, [a]))
+            }
         }
-        return "#\(a.id) \(body)"
+        return bursts
+    }
+
+    static func label(_ body: String, number: Int?, frame: Int?) -> String {
+        var text = number.map { "#\($0) \(body)" } ?? body
+        if let frame { text += " in frame \(frame)" }
+        return text
     }
 
     public static func describeClick(_ c: ClickEvent, mapper: CoordinateMapper) -> String {

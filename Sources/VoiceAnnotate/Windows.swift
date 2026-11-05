@@ -158,7 +158,7 @@ struct SettingsView: View {
                 }
             }
             Section("Snapshot overlay keys") {
-                Text("P pen · A arrow · R box · O ellipse · H highlighter · N pin · 1–6 colors · ⌘Z undo · ⇥ next shot · ↩ finish · ⎋ cancel. Tapping with the pen drops a pin.")
+                Text("P pen · A arrow · R box · O ellipse · H highlighter · N pin · 1–6 colors · ⌘Z undo · ⇥ next shot · ↩ finish · ⎋ cancel. Pen strokes stay as drawn and get no number.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }

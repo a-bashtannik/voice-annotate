@@ -121,7 +121,8 @@ enum CLI {
     static func demoAnnotations(shot: Int = 0, startTime: Double = 1) -> [Annotation] {
         var anns: [Annotation] = []
         func add(_ tool: AnnotationTool, _ points: [CGPoint], _ color: RGBAColor, _ t: Double) {
-            var a = Annotation(id: anns.count + 1, tool: tool, points: points, color: color, startTime: t, shot: shot)
+            let number = tool == .pen ? nil : anns.filter { $0.number != nil }.count + 1
+            var a = Annotation(id: anns.count + 1, number: number, tool: tool, points: points, color: color, startTime: t, shot: shot)
             a.finalize(endTime: t + 0.8)
             anns.append(a)
         }
@@ -195,9 +196,11 @@ enum CLI {
     private static func loadDemoMarks(from url: URL) throws -> [Annotation] {
         let colors: [String: RGBAColor] = ["red": .red, "yellow": .yellow, "green": .green, "blue": .blue, "magenta": .magenta, "white": .white]
         let marks = try JSONDecoder().decode([DemoMark].self, from: Data(contentsOf: url))
+        var numbered = 0
         return try marks.enumerated().map { i, m in
             guard let color = colors[m.color] else { throw AppError("Unknown color \(m.color)") }
-            var a = Annotation(id: i + 1, tool: m.tool, points: m.points.map { CGPoint(x: $0[0], y: $0[1]) }, color: color, startTime: m.start)
+            if m.tool != .pen { numbered += 1 }
+            var a = Annotation(id: i + 1, number: m.tool == .pen ? nil : numbered, tool: m.tool, points: m.points.map { CGPoint(x: $0[0], y: $0[1]) }, color: color, startTime: m.start)
             a.finalize(endTime: m.end)
             return a
         }
@@ -241,7 +244,7 @@ enum CLI {
         var input = settingsInput(mode: .snapshot, folder: folder, t0: HostClock.now(), duration: 1)
         let index = NSScreen.screens.firstIndex(of: screen) ?? 0
         input.shots = [ShotData(image: image, time: 0, canvasSize: screen.frame.size, display: index, round: 0, primary: true)]
-        var box = Annotation(id: 1, tool: .rectangle, points: [CGPoint(x: 290, y: 190), CGPoint(x: 510, y: 330)], color: .red, startTime: 0.2, screen: index)
+        var box = Annotation(id: 1, number: 1, tool: .rectangle, points: [CGPoint(x: 290, y: 190), CGPoint(x: 510, y: 330)], color: .red, startTime: 0.2, screen: index)
         box.finalize(endTime: 0.5)
         input.annotations = [box]
         try await finishDemo(input)
@@ -286,7 +289,7 @@ enum CLI {
         teal.orderOut(nil)
         orange.orderOut(nil)
         input.cursorTimeline = [(0, indices[0]), (seconds * 0.5, indices[indices.count - 1])]
-        var pin = Annotation(id: 1, tool: .pin, points: [CGPoint(x: 700, y: 350)], color: .red, startTime: seconds * 0.72, screen: indices[indices.count - 1])
+        var pin = Annotation(id: 1, number: 1, tool: .pin, points: [CGPoint(x: 700, y: 350)], color: .red, startTime: seconds * 0.72, screen: indices[indices.count - 1])
         pin.finalize(endTime: seconds * 0.72)
         input.annotations = [pin]
         // Click given in global AppKit coordinates, as the real click monitor sees it: center of the orange window.

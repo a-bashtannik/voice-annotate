@@ -18,7 +18,7 @@ voice-annotate records what you say while you draw. Every mark is numbered and b
 the image. The transcript then cites the mark at the word you were saying when you drew it,
 with its location in image pixels:
 
-> This best `[#1 circled (303,290)-(452,340) in frame 1]` accuracy says 312%. That has to be
+> This best `[#1 circled (301,290)-(450,340) in frame 1]` accuracy says 312%. That has to be
 > a units bug…
 
 The agent gets both what you meant and where it is, and can act on it without a back-and-forth.
@@ -36,9 +36,10 @@ everything else is the actual pipeline ([example capture.md](docs/demo/example-c
   and annotations.
 - **Dictation** (`⌃⌥⌘T`) records only your voice and copies the plain transcript, for
   prompts you'd rather say than type.
-- **Smart pen.** Strokes are classified when you let go: a closed loop becomes *circled*,
-  a straight stroke an *underline*, and a tap a *pin*. There are also arrow, box, ellipse,
-  highlighter and pin tools.
+- **Point or draw.** The arrow, box, ellipse, highlighter and pin tools make numbered
+  marks for pointing at things. The pen is for drawing (a layout idea, a word, a sketch):
+  its strokes stay exactly as drawn and get no badges. Strokes drawn in one go become a
+  single `[drawing (n strokes) over …]` reference at the moment you started.
 - **Grounded references.** Each mark appears in the transcript as `[#n <shape> <coords> in
   frame k]`, aligned to word-level timestamps.
 - **Multi-display.** All displays are captured in parallel. In walkthroughs, the cursor
@@ -90,7 +91,7 @@ The full design is in [SPEC.md](SPEC.md).
 | `⌃⌥⌘T` | **Dictation.** Voice only; `⌃⌥⌘T` again copies the transcript as plain text |
 | `⌃⌥⌘F` | Finish any capture |
 
-Snapshot tool keys: `P` smart pen · `A` arrow · `R` box · `O` ellipse · `H` highlighter ·
+Snapshot tool keys: `P` pen · `A` arrow · `R` box · `O` ellipse · `H` highlighter ·
 `N` pin · `1–6` colors · `⌘Z` undo.
 
 Each capture is saved as a bundle in `~/.voice-annotate/captures/<timestamp>/`, containing

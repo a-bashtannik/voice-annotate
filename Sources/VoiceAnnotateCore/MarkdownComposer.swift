@@ -107,7 +107,7 @@ public enum MarkdownComposer {
         if displays.count > 1 {
             out.append("The user has several displays; each frame says which display it shows.")
         }
-        var legend = "Numbered marks (#1, #2, …) drawn in the images are the user's own annotations; each is referenced in the transcript at the moment it was drawn."
+        var legend = "Marks in the images are the user's own: numbered ones (#1, #2, …) point at something, unnumbered pen strokes are freehand drawing. Each is referenced in the transcript at the moment it was drawn."
         if doc.hasClicks {
             legend += " Mouse clicks appear as [click at (x,y)]."
         }

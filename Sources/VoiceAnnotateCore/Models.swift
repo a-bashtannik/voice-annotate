@@ -21,7 +21,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .pen: return "Smart pen"
+        case .pen: return "Pen"
         case .arrow: return "Arrow"
         case .rectangle: return "Box"
         case .ellipse: return "Ellipse"
@@ -62,7 +62,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
 
 /// Semantic shape of a finished annotation (what the agent is told it is).
 public enum AnnotationShape: String, Codable, Sendable {
-    case circled, line, freehand, arrow, box, ellipse, highlight, pin
+    case freehand, arrow, box, ellipse, highlight, pin
 }
 
 public struct RGBAColor: Codable, Equatable, Sendable {
@@ -97,8 +97,11 @@ public struct RGBAColor: Codable, Equatable, Sendable {
 
 /// One user annotation. Geometry is in canvas points (display points, origin top-left).
 public struct Annotation: Codable, Identifiable, Equatable, Sendable {
-    /// Sequential number shown to the user and the agent (#1, #2, …). 0 while in progress.
+    /// Unique within a capture (0 while in progress). Not shown; see `number`.
     public var id: Int
+    /// Number shown as a badge and cited in the transcript (#1, #2, …). Pen strokes are
+    /// drawings and stay unnumbered.
+    public var number: Int?
     public var tool: AnnotationTool
     public var shape: AnnotationShape
     public var points: [CGPoint]
@@ -114,6 +117,7 @@ public struct Annotation: Codable, Identifiable, Equatable, Sendable {
 
     public init(
         id: Int = 0,
+        number: Int? = nil,
         tool: AnnotationTool,
         points: [CGPoint],
         color: RGBAColor,
@@ -124,6 +128,7 @@ public struct Annotation: Codable, Identifiable, Equatable, Sendable {
         screen: Int = 0
     ) {
         self.id = id
+        self.number = number
         self.tool = tool
         self.shape = ShapeClassifier.defaultShape(for: tool)
         self.points = points
@@ -135,11 +140,12 @@ public struct Annotation: Codable, Identifiable, Equatable, Sendable {
         self.screen = screen
     }
 
-    /// Classifies the finished geometry into its semantic shape.
     public mutating func finalize(endTime: Double) {
         self.endTime = endTime
-        shape = ShapeClassifier.shape(for: tool, points: points)
     }
+
+    /// Pen strokes are freehand drawing: never reinterpreted as shapes, never numbered.
+    public var isDrawing: Bool { tool == .pen }
 
     public static let pinRadius: Double = 13
 
