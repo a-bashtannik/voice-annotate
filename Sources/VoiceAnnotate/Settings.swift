@@ -142,6 +142,7 @@ final class AppSettings: ObservableObject {
 
     @Published var hotkeys: [String: Hotkey] { didSet { save(hotkeys, "hotkeys") } }
     @Published var model: WhisperModel { didSet { defaults.set(model.rawValue, forKey: "model") } }
+    @Published var language: TranscriptionLanguage { didSet { defaults.set(language.storageValue, forKey: "transcriptionLanguage") } }
     @Published var compute: WhisperCompute { didSet { defaults.set(compute.rawValue, forKey: "compute") } }
     @Published var vocabulary: String { didSet { defaults.set(vocabulary, forKey: "vocabulary") } }
     @Published var maxFrames: Int { didSet { defaults.set(maxFrames, forKey: "maxFrames") } }
@@ -165,6 +166,7 @@ final class AppSettings: ObservableObject {
             hotkeys = [:]
         }
         model = WhisperModel(rawValue: d.string(forKey: "model") ?? "") ?? .largeTurbo
+        language = TranscriptionLanguage(storage: d.string(forKey: "transcriptionLanguage"))
         compute = WhisperCompute(rawValue: d.string(forKey: "compute") ?? "") ?? .auto
         vocabulary = d.string(forKey: "vocabulary") ?? ""
         maxFrames = d.object(forKey: "maxFrames") as? Int ?? 30

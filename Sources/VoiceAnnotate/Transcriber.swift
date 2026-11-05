@@ -7,6 +7,10 @@ struct TranscriptionOutput {
     /// Times relative to the start of the audio.
     var words: [Word]
     var segments: [SpeechSegment]
+    /// Languages the speech was decoded in, in order of first use.
+    var languages: [String] = []
+    /// Why the transcript may be wrong; shown to the user.
+    var warning: String?
 
     /// The transcript as plain prose.
     var plainText: String {
@@ -151,19 +155,20 @@ final class Transcriber: ObservableObject {
         return url
     }
 
-    func transcribe(_ samples: [Float], model: String, vocabulary: String) async throws -> TranscriptionOutput {
+    func transcribe(_ samples: [Float], model: String, language: TranscriptionLanguage, vocabulary: String) async throws -> TranscriptionOutput {
         // Silence (or no mic): skip, Whisper would hallucinate.
         guard samples.count > Int(AudioResult.sampleRate / 2), AudioRecorder.rms(samples) > 0.0015 else {
             return TranscriptionOutput(words: [], segments: [])
         }
         let kit = try await ensureLoaded(model).value
+        let plan = LanguagePlan.resolve(selection: language, isMultilingual: kit.textDecoder.isModelMultilingual)
         var options = DecodingOptions(
             verbose: false,
             task: .transcribe,
-            language: "en",
+            language: plan.language,
             temperature: 0,
             usePrefillPrompt: true,
-            detectLanguage: false,
+            detectLanguage: plan.language == nil,
             skipSpecialTokens: true,
             withoutTimestamps: false,
             wordTimestamps: true,
@@ -175,7 +180,8 @@ final class Transcriber: ObservableObject {
         }
         let started = Date()
         let results = try await kit.transcribe(audioArray: samples, decodeOptions: options)
-        let output = Self.convert(results)
+        var output = Self.convert(results)
+        output.warning = plan.warning
         Log.transcribe.info("Transcribed \(String(format: "%.1f", Double(samples.count) / AudioResult.sampleRate), privacy: .public)s audio in \(String(format: "%.2f", Date().timeIntervalSince(started)), privacy: .public)s, \(output.words.count) words")
         return output
     }
@@ -183,11 +189,13 @@ final class Transcriber: ObservableObject {
     nonisolated static func convert(_ results: [TranscriptionResult]) -> TranscriptionOutput {
         var words: [Word] = []
         var segments: [SpeechSegment] = []
+        var languages: [String] = []
         for result in results {
             for segment in result.segments {
                 let text = cleanText(segment.text)
                 if !text.isEmpty {
                     segments.append(SpeechSegment(text: text, start: Double(segment.start), end: Double(segment.end)))
+                    if !languages.contains(result.language) { languages.append(result.language) }
                 }
                 // Blank fragments carry the spaces of scripts split into fragments.
                 let kept = (segment.words ?? []).filter { isBlank($0.word) || !isNoise($0.word) }
@@ -196,7 +204,7 @@ final class Transcriber: ObservableObject {
         }
         words.sort { $0.start < $1.start }
         segments.sort { $0.start < $1.start }
-        return TranscriptionOutput(words: words, segments: segments)
+        return TranscriptionOutput(words: words, segments: segments, languages: languages)
     }
 
     private nonisolated static func isBlank(_ word: String) -> Bool {

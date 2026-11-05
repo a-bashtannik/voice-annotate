@@ -95,7 +95,7 @@ enum CLI {
         out(String(format: "audio: %.2fs, rms %.4f", Double(samples.count) / AudioResult.sampleRate, AudioRecorder.rms(samples)))
         try await loadModel(model)
         let started = Date()
-        let result = try await Transcriber.shared.transcribe(samples, model: model, vocabulary: AppSettings.shared.vocabulary)
+        let result = try await Transcriber.shared.transcribe(samples, model: model, language: AppSettings.shared.language, vocabulary: AppSettings.shared.vocabulary)
         out(String(format: "transcribed in %.2fs", Date().timeIntervalSince(started)))
         for s in result.segments {
             out(String(format: "[segment %6.2f–%6.2f] %@", s.start, s.end, s.text))
@@ -164,7 +164,7 @@ enum CLI {
         return CaptureInput(
             mode: mode, folder: folder, startDate: Date(), t0: t0, duration: duration, annotations: [], clicks: [],
             shots: [], displays: displays, audio: nil, recordings: [:], cursorTimeline: [],
-            model: s.model.rawValue, vocabulary: s.vocabulary,
+            model: s.model.rawValue, language: s.language, vocabulary: s.vocabulary,
             maxFrames: s.maxFrames, longEdge: s.imageLongEdge, detailCrops: s.detailCrops, keepOriginals: s.keepOriginals,
             fadeSeconds: s.fadeSeconds
         )
