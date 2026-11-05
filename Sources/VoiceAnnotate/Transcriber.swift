@@ -10,7 +10,7 @@ struct TranscriptionOutput {
 
     /// The transcript as plain prose.
     var plainText: String {
-        segments.map(\.text).joined(separator: " ")
+        TranscriptText.joined(segments.map(\.text))
     }
 }
 
@@ -188,14 +188,18 @@ final class Transcriber: ObservableObject {
                 if !text.isEmpty {
                     segments.append(SpeechSegment(text: text, start: Double(segment.start), end: Double(segment.end)))
                 }
-                for w in segment.words ?? [] where !isNoise(w.word) {
-                    words.append(Word(text: w.word, start: Double(w.start), end: Double(w.end)))
-                }
+                // Blank fragments carry the spaces of scripts split into fragments.
+                let kept = (segment.words ?? []).filter { isBlank($0.word) || !isNoise($0.word) }
+                words += TranscriptText.mergedFragments(kept.map { Word(text: $0.word, start: Double($0.start), end: Double($0.end)) })
             }
         }
         words.sort { $0.start < $1.start }
         segments.sort { $0.start < $1.start }
         return TranscriptionOutput(words: words, segments: segments)
+    }
+
+    private nonisolated static func isBlank(_ word: String) -> Bool {
+        word.allSatisfy(\.isWhitespace)
     }
 
     nonisolated static func isNoise(_ word: String) -> Bool {
