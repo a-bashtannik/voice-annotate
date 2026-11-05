@@ -5,6 +5,7 @@
   "scripts": {
     "studio": "remotion studio",
     "render": "remotion render Promo out/voice-annotate.mp4 --codec h264 --crf 18",
+    "poster": "remotion still Promo out/poster.png --frame=0",
     "still": "remotion still"
   },
   "dependencies": {

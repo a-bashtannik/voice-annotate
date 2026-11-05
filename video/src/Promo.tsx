@@ -1,4 +1,5 @@
 import { AbsoluteFill, Sequence, interpolate, useCurrentFrame } from "remotion";
+import { COVER_SECONDS, Cover } from "./Cover";
 import { DEMO_SECONDS, Demo } from "./Demo";
 import { HOOK_SECONDS, Hook } from "./Hook";
 import { OUTPUT_SECONDS, Output } from "./Output";
@@ -8,6 +9,7 @@ import { sec } from "./timeline";
 
 // Demo → Output is one continuous move (the screen slides aside), so Demo doesn't fade.
 const scenes = [
+  { C: Cover, length: sec(COVER_SECONDS), fade: true },
   { C: Hook, length: sec(HOOK_SECONDS), fade: true },
   { C: Demo, length: sec(DEMO_SECONDS), fade: false },
   { C: Output, length: sec(OUTPUT_SECONDS), fade: true },
