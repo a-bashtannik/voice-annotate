@@ -4,6 +4,7 @@ import Combine
 import CoreGraphics
 import Foundation
 import ServiceManagement
+import VoiceAnnotateCore
 
 struct Hotkey: Codable, Equatable {
     var keyCode: UInt32
@@ -97,22 +98,6 @@ enum DrawModifier: String, CaseIterable, Identifiable {
         case .optionCommand: return held == [.maskAlternate, .maskCommand]
         case .function: return held == [.maskSecondaryFn]
         case .off: return false
-        }
-    }
-}
-
-enum WhisperModel: String, CaseIterable, Identifiable {
-    case largeTurbo = "openai_whisper-large-v3-v20240930_turbo_632MB"
-    case smallEn = "openai_whisper-small.en"
-    case baseEn = "openai_whisper-base.en"
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .largeTurbo: return "Large v3 Turbo (best, ~630 MB)"
-        case .smallEn: return "Small English (~480 MB)"
-        case .baseEn: return "Base English (fastest, ~150 MB)"
         }
     }
 }

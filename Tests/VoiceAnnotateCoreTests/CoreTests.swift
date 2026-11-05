@@ -1,6 +1,7 @@
 import CoreGraphics
 import XCTest
 @testable import VoiceAnnotateCore
+import WhisperKit
 
 final class ShapeClassifierTests: XCTestCase {
     func circle(turns: Double = 1.0, n: Int = 60, cx: Double = 200, cy: Double = 150, rx: Double = 80, ry: Double = 50) -> [CGPoint] {
@@ -441,5 +442,76 @@ final class MultiDisplayTests: XCTestCase {
         let md = MarkdownComposer.compose(doc)
         XCTAssertTrue(md.contains("frame 2 · 00:03 · display \"DELL (2)\""))
         XCTAssertTrue(md.contains("several displays"))
+    }
+}
+
+final class LanguageListTests: XCTestCase {
+    func testListMatchesWhisperKit() {
+        XCTAssertEqual(Set(WhisperLanguage.all.map(\.code)), Constants.languageCodes)
+        XCTAssertEqual(WhisperLanguage.all.count, 100)
+    }
+
+    func testListIsAlphabetical() {
+        let names = WhisperLanguage.all.map(\.name)
+        XCTAssertEqual(names, names.sorted())
+    }
+
+    func testMenuTitleStartsWithTheEnglishName() {
+        XCTAssertEqual(WhisperLanguage.named(code: "ru")?.menuTitle, "Russian  Русский")
+        XCTAssertEqual(WhisperLanguage.named(code: "en")?.menuTitle, "English")
+        for language in WhisperLanguage.all {
+            XCTAssertTrue(language.menuTitle.hasPrefix(language.name))
+        }
+    }
+}
+
+final class LanguageSettingTests: XCTestCase {
+    func testMissingOrUnknownSettingIsEnglish() {
+        XCTAssertEqual(TranscriptionLanguage(storage: nil), .english)
+        XCTAssertEqual(TranscriptionLanguage(storage: "tlh"), .english)
+    }
+
+    func testSettingRoundTrips() {
+        for language in [TranscriptionLanguage.auto, .english, TranscriptionLanguage(argument: "yue")!] {
+            XCTAssertEqual(TranscriptionLanguage(storage: language.storageValue), language)
+        }
+    }
+
+    func testPersistedModelsStillDecode() {
+        XCTAssertEqual(WhisperModel(rawValue: "openai_whisper-large-v3-v20240930_turbo_632MB"), .largeTurbo)
+        XCTAssertEqual(WhisperModel(rawValue: "openai_whisper-small.en"), .smallEn)
+        XCTAssertEqual(WhisperModel(rawValue: "openai_whisper-base.en"), .baseEn)
+    }
+
+    func testEnglishNeedsNoWarningOnAnyModel() {
+        for model in WhisperModel.allCases {
+            XCTAssertEqual(LanguagePlan.resolve(selection: .english, model: model), LanguagePlan(language: "en", warning: nil))
+        }
+    }
+
+    func testEnglishOnlyModelWarnsForAnythingElse() {
+        let russian = TranscriptionLanguage(argument: "ru")!
+        for selection in [russian, .auto] {
+            for model in [WhisperModel.smallEn, .baseEn] {
+                let plan = LanguagePlan.resolve(selection: selection, model: model)
+                XCTAssertEqual(plan.language, "en")
+                XCTAssertNotNil(plan.warning)
+            }
+        }
+    }
+
+    func testAutoLeavesDetectionToWhisper() {
+        XCTAssertEqual(LanguagePlan.resolve(selection: .auto, model: .base), LanguagePlan(language: nil, warning: nil))
+    }
+
+    func testCantoneseDecodesAsChinese() {
+        let cantonese = TranscriptionLanguage(argument: "yue")!
+        for model in [WhisperModel.largeTurbo, .small, .base] {
+            XCTAssertEqual(LanguagePlan.resolve(selection: cantonese, model: model), LanguagePlan(language: "zh", warning: nil))
+        }
+    }
+
+    func testSuggestedModelResolvesTheWarning() {
+        XCTAssertNil(LanguagePlan.resolve(selection: TranscriptionLanguage(argument: "ru")!, model: .small).warning)
     }
 }
