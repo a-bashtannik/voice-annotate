@@ -113,10 +113,12 @@ Or build it yourself (see [Build](#build)).
 - **Faster after a while.** For about 10 minutes after the first start, macOS compiles the
   model for the Neural Engine in the background. Until then transcription runs on the GPU,
   roughly 3× slower (a 1-minute recording takes ~15 s instead of ~5 s).
-- **After updating** to a new release (or rebuilding with ad-hoc signing), macOS may keep
-  showing Screen Recording as enabled while the app still can't record. Remove voice-annotate
-  from the list in System Settings → Privacy & Security → Screen Recording (the − button),
-  then add it again, or run `tccutil reset ScreenCapture com.jroth.voiceannotate`.
+- **After updating** to a new release (or rebuilding with ad-hoc signing, or replacing the app
+  with a differently signed build), macOS may keep showing Screen Recording as enabled while
+  the app still can't record: the grant belongs to the old build, and switching it off and on
+  doesn't help. Remove voice-annotate from the list in System Settings → Privacy & Security →
+  Screen Recording (the − button), then add it again, or run
+  `tccutil reset ScreenCapture com.jroth.voiceannotate`, reopen the app and grant it again.
 
 ## Use
 
